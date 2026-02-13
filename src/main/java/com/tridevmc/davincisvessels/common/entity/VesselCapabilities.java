@@ -15,13 +15,16 @@ import com.tridevmc.movingworld.common.entity.MovingWorldCapabilities;
 import com.tridevmc.movingworld.common.util.FloodFiller;
 import com.tridevmc.movingworld.common.util.LocatedBlockList;
 import com.tridevmc.movingworld.common.util.MaterialDensity;
-import net.minecraft.block.AirBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.AirBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Entity.RemovalReason;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+
 import org.apache.commons.lang3.tuple.ImmutablePair;
 
 import java.util.*;
@@ -72,7 +75,7 @@ public class VesselCapabilities extends MovingWorldCapabilities {
     }
 
     public float getEnginePower() {
-        return vessel.getDataManager().get(EntityVessel.ENGINE_POWER);
+        return vessel.getEntityData().get(EntityVessel.ENGINE_POWER);
     }
 
     public ImmutablePair<LocatedBlock, LocatedBlock> findClosestValidAnchor(int radius) {
@@ -90,20 +93,20 @@ public class VesselCapabilities extends MovingWorldCapabilities {
                 Iterator<Map.Entry<UUID, BlockLocation>> relationIterator = anchor.getRelatedAnchors().entrySet().iterator();
                 while (relationIterator.hasNext()) {
                     Map.Entry<UUID, BlockLocation> relation = relationIterator.next();
-                    if (relation.getValue().getDim() == vessel.world.getDimension().getType()) {
-                        TileEntity relatedTile = vessel.world.getTileEntity(relation.getValue().getPos());
+                    if (relation.getValue().getDim() == vessel.level().dimension()) {
+                        BlockEntity relatedTile = vessel.level().getBlockEntity(relation.getValue().getPos());
                         if (relatedTile instanceof TileAnchorPoint) {
                             TileAnchorPoint relatedAnchor = (TileAnchorPoint) relatedTile;
                             if (relatedAnchor.getInstance().getRelatedAnchors().containsKey(anchor.getIdentifier())
                                     && relatedAnchor.getInstance().getType().equals(AnchorInstance.InstanceType.LAND)) {
-                                int xDist = (int) Math.abs(Math.round(vessel.posX) - relatedAnchor.getPos().getX());
-                                int yDist = (int) Math.abs(Math.round(vessel.posY) - relatedAnchor.getPos().getY());
-                                int zDist = (int) Math.abs(Math.round(vessel.posZ) - relatedAnchor.getPos().getZ());
+                                int xDist = (int) Math.abs(Math.round(vessel.getX()) - relatedAnchor.getBlockPos().getX());
+                                int yDist = (int) Math.abs(Math.round(vessel.getY()) - relatedAnchor.getBlockPos().getY());
+                                int zDist = (int) Math.abs(Math.round(vessel.getX()) - relatedAnchor.getBlockPos().getZ());
                                 if (!(xDist > radius || yDist > radius || zDist > radius)) {
                                     int collectiveDist = xDist + yDist + zDist;
                                     if (collectiveDist < smallestOverallDistance) {
                                         smallestOverallDistance = collectiveDist;
-                                        closest = new LocatedBlock(vessel.getEntityWorld().getBlockState(relatedTile.getPos()), relatedTile, relatedTile.getPos());
+                                        closest = new LocatedBlock(vessel.level().getBlockState(relatedTile.getBlockPos()), relatedTile, relatedTile.getBlockPos());
                                         vesselAnchor = anchorLB;
                                     }
                                 }
@@ -126,8 +129,8 @@ public class VesselCapabilities extends MovingWorldCapabilities {
                 ePower += te.getPowerIncrement(this);
             }
         }
-        if (!vessel.world.isRemote)
-            vessel.getDataManager().set(EntityVessel.ENGINE_POWER, ePower);
+        if (!vessel.level().isClientSide())
+            vessel.getEntityData().set(EntityVessel.ENGINE_POWER, ePower);
     }
 
     @Override
@@ -170,7 +173,7 @@ public class VesselCapabilities extends MovingWorldCapabilities {
     }
 
     public boolean canMove() {
-        return vessel.getDataManager().get(EntityVessel.CAN_MOVE);
+        return vessel.getEntityData().get(EntityVessel.CAN_MOVE);
     }
 
     public List<ITileEngineModifier> getEngines() {
@@ -193,22 +196,22 @@ public class VesselCapabilities extends MovingWorldCapabilities {
 
     @Override
     public boolean mountEntity(Entity player) {
-        if (player.isSneaking()) {
+        if (player.isCrouching()) {
             return false;
-        } else if (vessel.isBeingRidden()) {
-            if (player instanceof PlayerEntity) {
-                tryMountSeat((PlayerEntity) player);
+        } else if (vessel.isVehicle()) {
+            if (player instanceof Player) {
+                tryMountSeat((Player) player);
             }
             return true;
         } else {
-            if (!vessel.world.isRemote) {
+            if (!vessel.level().isClientSide) {
                 player.startRiding(vessel);
             }
             return true;
         }
     }
 
-    private void tryMountSeat(PlayerEntity player) {
+    private void tryMountSeat(Player player) {
         EntitySeat seat = getAvailableSeat();
         if (seat != null) {
             player.startRiding(seat);
@@ -217,7 +220,7 @@ public class VesselCapabilities extends MovingWorldCapabilities {
 
     public void spawnSeatEntities() {
         if (seats != null)
-            seats.forEach(seat -> vessel.world.addEntity(seat));
+            seats.forEach(seat -> ((ServerLevel) vessel.level()).addFreshEntity(seat));
     }
 
     @Override
@@ -226,9 +229,9 @@ public class VesselCapabilities extends MovingWorldCapabilities {
 
         blockCount++;
         nonAirBlockCount++;
-        TileEntity tile = null;
+        BlockEntity tile = null;
         if (vessel != null && vessel.getMobileChunk() != null)
-            tile = vessel.getMobileChunk().getTileEntity(pos);
+            tile = vessel.getMobileChunk().getBlockEntity(pos);
 
         Block block = state.getBlock();
         if (block == null) {
@@ -248,10 +251,10 @@ public class VesselCapabilities extends MovingWorldCapabilities {
             balloonCount += ((IBlockBalloon) block).getBalloonWorth(tile);
         } else if (DavincisVesselsMod.BLOCK_CONFIG.isBalloon(block)) {
             balloonCount++;
-        } else if (block == DavincisVesselsMod.CONTENT.blockFloater) {
+        } else if (block == DavincisVesselsMod.CONTENT.blockFloater.get()) {
             floaters++;
-        } else if (block == DavincisVesselsMod.CONTENT.blockAnchorPoint) {
-            TileEntity te = vessel.getMobileChunk().getTileEntity(pos);
+        } else if (block == DavincisVesselsMod.CONTENT.blockAnchorPoint.get()) {
+            BlockEntity te = vessel.getMobileChunk().getBlockEntity(pos);
             if (te instanceof TileAnchorPoint && ((TileAnchorPoint) te).getInstance() != null
                     && ((TileAnchorPoint) te).getInstance().getType().equals(AnchorInstance.InstanceType.VESSEL)) {
                 if (anchorPoints == null) {
@@ -259,15 +262,15 @@ public class VesselCapabilities extends MovingWorldCapabilities {
                 }
                 anchorPoints.add(new LocatedBlock(state, te, pos));
             }
-        } else if (block == DavincisVesselsMod.CONTENT.blockEngine) {
-            TileEntity te = vessel.getMobileChunk().getTileEntity(pos);
+        } else if (block == DavincisVesselsMod.CONTENT.blockEngine.get()) {
+            BlockEntity te = vessel.getMobileChunk().getBlockEntity(pos);
             if (te instanceof ITileEngineModifier) {
                 if (engines == null) {
                     engines = new ArrayList<>(4);
                 }
                 engines.add((ITileEngineModifier) te);
             }
-        } else if (block == DavincisVesselsMod.CONTENT.blockSeat || DavincisVesselsMod.BLOCK_CONFIG.isSeat(block)) {
+        } else if (block == DavincisVesselsMod.CONTENT.blockSeat.get() || DavincisVesselsMod.BLOCK_CONFIG.isSeat(block)) {
             int x1 = vessel.riderDestination.getX(), y1 = vessel.riderDestination.getY(), z1 = vessel.riderDestination.getZ();
             switch (vessel.frontDirection) {
                 case SOUTH: {
@@ -286,10 +289,13 @@ public class VesselCapabilities extends MovingWorldCapabilities {
                     x1 -= 1;
                     break;
                 }
+                default: {
+                    break;
+                }
             }
 
             if (pos.getX() != x1 || pos.getY() != y1 || pos.getZ() != z1) {
-                EntitySeat seat = new EntitySeat(vessel.world);
+                EntitySeat seat = new EntitySeat(vessel.level());
                 seat.setupVessel(vessel, pos);
                 addSeat(seat);
             }
@@ -322,7 +328,7 @@ public class VesselCapabilities extends MovingWorldCapabilities {
     @Override
     public void clear() {
         if (seats != null) {
-            seats.forEach(Entity::remove);
+            seats.forEach(seat -> seat.remove(RemovalReason.DISCARDED));
             seats.clear();
         }
         if (engines != null) {

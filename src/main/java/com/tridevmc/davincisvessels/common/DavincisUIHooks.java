@@ -1,52 +1,70 @@
 package com.tridevmc.davincisvessels.common;
 
-import net.minecraft.client.gui.ScreenManager;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.ServerPlayerEntity;
-import net.minecraft.inventory.container.Container;
-import net.minecraft.inventory.container.ContainerType;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.MenuAccess;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.common.extensions.IForgeContainerType;
+import net.minecraftforge.common.extensions.IForgeMenuType;
 import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.fml.network.IContainerFactory;
-import net.minecraftforge.fml.network.NetworkHooks;
+import net.minecraftforge.network.IContainerFactory;
+import net.minecraftforge.network.NetworkHooks;
+import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.IForgeRegistry;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.Optional;
+
+import org.checkerframework.checker.units.qual.C;
+
+import com.mojang.blaze3d.platform.ScreenManager;
 
 public class DavincisUIHooks {
 
     private static Optional<IElementProvider> lastProvider = Optional.empty();
 
-    public static <C extends Container> ContainerType<C> register(IForgeRegistry<ContainerType<?>> registry) {
-        ContainerType<C> containerType = IForgeContainerType.create(getFactory());
-        containerType.setRegistryName("davincisvessels", "containers");
-        registry.register(containerType);
-        DistExecutor.runWhenOn(Dist.CLIENT, () -> () -> ScreenManager.registerFactory(containerType, getScreenFactory()));
+    //  public static MenuType containerType;
+
+    // public static RegistryObject<MenuType<? extends AbstractContainerMenu>> register(DeferredRegister<MenuType<?>> registry) {
+    //     return registry.register("containers", () -> IForgeMenuType.create(getFactory()));
+    // }
+
+    public static MenuType<? extends AbstractContainerMenu> register(DeferredRegister<MenuType<?>> registry) {
+        MenuType<AbstractContainerMenu> containerType = IForgeMenuType.create(getFactory());
+        registry.register("containers", () -> containerType);
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> MenuScreens.register(containerType, getScreenFactory()));
         return containerType;
     }
 
-    private static <C extends Container> IContainerFactory<C> getFactory() {
+    // public static void registerScreens(MenuType containerType) {
+    //     MenuScreens.register(containerType, getScreenFactory());
+    // }
+
+    private static <C extends AbstractContainerMenu> IContainerFactory<C> getFactory() {
         return (windowId, inv, data) -> {
             UIType type = UIType.byId(data.readByte());
-            World world = inv.player.world;
+            Level world = inv.player.level();
 
             switch (type) {
                 case TILE:
                     BlockPos pos = data.readBlockPos();
-                    TileEntity tile = world.getTileEntity(pos);
+                    BlockEntity tile = world.getBlockEntity(pos);
                     if (tile instanceof IElementProvider) {
                         lastProvider = Optional.of((IElementProvider) tile);
                         return (C) ((IElementProvider) tile).createMenu(windowId, inv, inv.player);
                     }
                 case ENTITY:
                     int entityId = data.readVarInt();
-                    Entity entity = world.getEntityByID(entityId);
+                    Entity entity = world.getEntity(entityId);
                     if (entity instanceof IElementProvider) {
                         lastProvider = Optional.of((IElementProvider) entity);
                         return (C) ((IElementProvider) entity).createMenu(windowId, inv, inv.player);
@@ -59,31 +77,31 @@ public class DavincisUIHooks {
     }
 
     @OnlyIn(Dist.CLIENT)
-    private static ScreenManager.IScreenFactory getScreenFactory() {
-        return (container, inv, name) -> lastProvider.map(eP -> eP.createScreen(container, inv.player)).orElse(null);
+    private static <C extends AbstractContainerMenu, U extends Screen & MenuAccess<C>> MenuScreens.ScreenConstructor<C,U> getScreenFactory() {
+        return (container, inv, name) -> lastProvider.map(eP -> (U) eP.createScreen(container, inv.player)).orElse(null);
     }
 
-    public static void openGui(PlayerEntity player, IElementProvider provider) {
-        if (player instanceof ServerPlayerEntity) {
-            if (provider instanceof TileEntity) {
-                openGui((ServerPlayerEntity) player, provider, ((TileEntity) provider).getPos());
+    public static void openGui(Player player, IElementProvider provider) {
+        if (player instanceof ServerPlayer) {
+            if (provider instanceof BlockEntity) {
+                openGui((ServerPlayer) player, provider, ((BlockEntity) provider).getBlockPos());
             } else if (provider instanceof Entity) {
-                openGui((ServerPlayerEntity) player, provider, ((Entity) provider).getEntityId());
+                openGui((ServerPlayer) player, provider, ((Entity) provider).getId());
             }
         } else {
             throw new ClassCastException(String.format("Unable to cast type %s to ServerPlayerEntity", player.getClass().getName()));
         }
     }
 
-    public static void openGui(ServerPlayerEntity player, IElementProvider provider, BlockPos pos) {
-        NetworkHooks.openGui(player, provider, packetBuffer -> {
+    public static void openGui(ServerPlayer player, IElementProvider provider, BlockPos pos) {
+        NetworkHooks.openScreen(player, provider, packetBuffer -> {
             packetBuffer.writeByte(UIType.TILE.id);
             packetBuffer.writeBlockPos(pos);
         });
     }
 
-    public static void openGui(ServerPlayerEntity player, IElementProvider provider, int entity) {
-        NetworkHooks.openGui(player, provider, packetBuffer -> {
+    public static void openGui(ServerPlayer player, IElementProvider provider, int entity) {
+        NetworkHooks.openScreen(player, provider, packetBuffer -> {
             packetBuffer.writeByte(UIType.TILE.id);
             packetBuffer.writeVarInt(entity);
         });

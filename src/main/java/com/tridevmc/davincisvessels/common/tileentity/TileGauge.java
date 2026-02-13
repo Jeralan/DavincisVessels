@@ -1,22 +1,25 @@
 package com.tridevmc.davincisvessels.common.tileentity;
 
+import javax.annotation.Nonnull;
+
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.movingworld.api.IMovingTile;
 import com.tridevmc.movingworld.common.chunk.mobilechunk.MobileChunk;
 import com.tridevmc.movingworld.common.entity.EntityMovingWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SUpdateTileEntityPacket;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
 
-public class TileGauge extends TileEntity implements IMovingTile {
+public class TileGauge extends BlockEntity implements IMovingTile {
     public EntityMovingWorld parentVessel;
     private BlockPos chunkPos;
 
-    public TileGauge() {
-        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileHelm.class));
+    public TileGauge(BlockPos pos, BlockState state) {
+        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileHelm.class).get(), pos, state);
         parentVessel = null;
     }
 
@@ -52,23 +55,26 @@ public class TileGauge extends TileEntity implements IMovingTile {
     }
 
     @Override
-    public SUpdateTileEntityPacket getUpdatePacket() {
-        CompoundNBT compound = new CompoundNBT();
-        write(compound);
-        return new SUpdateTileEntityPacket(pos, 1, compound);
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        CompoundTag compound = new CompoundTag();
+        saveAdditional(compound);
+        return ClientboundBlockEntityDataPacket.create(this, x -> compound);
     }
 
     @Override
-    public void onDataPacket(NetworkManager net, SUpdateTileEntityPacket packet) {
-        read(packet.getNbtCompound());
+    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket packet) {
+        CompoundTag tag = packet.getTag();
+        if (tag != null) {
+            load(tag);
+        }
     }
 
     @Override
-    public void read(CompoundNBT tag) {
-        super.read(tag);
-        if (tag.contains("vehicle") && world != null) {
+    public void load(@Nonnull CompoundTag tag) {
+        super.load(tag);
+        if (tag.contains("vehicle") && level != null) {
             int id = tag.getInt("vehicle");
-            Entity entity = world.getEntityByID(id);
+            Entity entity = level.getEntity(id);
             if (entity instanceof EntityMovingWorld) {
                 parentVessel = (EntityMovingWorld) entity;
             }
@@ -76,8 +82,8 @@ public class TileGauge extends TileEntity implements IMovingTile {
     }
 
     @Override
-    public CompoundNBT write(CompoundNBT tag) {
-        return super.write(tag);
+    public void saveAdditional(@Nonnull CompoundTag tag) {
+        super.saveAdditional(tag);
     }
 
 }

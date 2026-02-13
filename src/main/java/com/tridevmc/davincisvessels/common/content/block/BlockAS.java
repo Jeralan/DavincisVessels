@@ -1,15 +1,16 @@
 package com.tridevmc.davincisvessels.common.content.block;
 
-import net.minecraft.block.Block;
-import net.minecraft.block.SoundType;
-import net.minecraft.block.material.Material;
+import java.util.function.Function;
+
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SoundType;
 
 public class BlockAS extends Block {
-    public BlockAS(Material material, SoundType soundType) {
+    public BlockAS(Function<Properties, Properties> material, SoundType soundType) {
         this(material, soundType, 1F, 1F);
     }
 
-    public BlockAS(Material material, SoundType soundType, float hardness, float resistance) {
-        super(Block.Properties.create(material).sound(soundType).hardnessAndResistance(hardness, resistance));
+    public BlockAS(Function<Properties, Properties> material, SoundType soundType, float hardness, float resistance) {
+        super(material.apply(Block.Properties.of().sound(soundType).strength(hardness, resistance)));
     }
 }

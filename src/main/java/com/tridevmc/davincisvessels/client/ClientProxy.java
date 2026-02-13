@@ -1,6 +1,7 @@
 package com.tridevmc.davincisvessels.client;
 
 import com.tridevmc.compound.config.CompoundConfig;
+import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.client.control.DavincisKeybinds;
 import com.tridevmc.davincisvessels.client.control.VesselKeyHandler;
 import com.tridevmc.davincisvessels.client.handler.ClientHookContainer;
@@ -16,10 +17,11 @@ import com.tridevmc.davincisvessels.common.tileentity.TileGauge;
 import com.tridevmc.davincisvessels.common.tileentity.TileHelm;
 import com.tridevmc.movingworld.client.render.RenderMovingWorld;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.client.registry.ClientRegistry;
-import net.minecraftforge.fml.client.registry.RenderingRegistry;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 
 public class ClientProxy extends CommonProxy {
 
@@ -34,7 +36,7 @@ public class ClientProxy extends CommonProxy {
     }
 
     private void registerKeyHandlers() {
-        keybinds = CompoundConfig.of(DavincisKeybinds.class, ModLoadingContext.get().getActiveContainer());
+        keybinds = CompoundConfig.of(DavincisKeybinds.class, DavincisVesselsMod.CONTEXT.getContainer());
         keybinds.addToControlsMenu();
         MinecraftForge.EVENT_BUS.register(new VesselKeyHandler(keybinds));
     }
@@ -45,14 +47,14 @@ public class ClientProxy extends CommonProxy {
     }
 
     private void registerEntityRenderers() {
-        RenderingRegistry.registerEntityRenderingHandler(EntityVessel.class, RenderMovingWorld::new);
-        RenderingRegistry.registerEntityRenderingHandler(EntityParachute.class, RenderParachute::new);
-        RenderingRegistry.registerEntityRenderingHandler(EntitySeat.class, RenderSeat::new);
+        EntityRenderers.register(((EntityType<EntityVessel>) DavincisVesselsMod.CONTENT.entityTypes.get(EntityVessel.class).get()), RenderMovingWorld::new);
+        EntityRenderers.register(((EntityType<EntityParachute>) DavincisVesselsMod.CONTENT.entityTypes.get(EntityParachute.class).get()), RenderParachute::new);
+        EntityRenderers.register(((EntityType<EntitySeat>) DavincisVesselsMod.CONTENT.entityTypes.get(EntitySeat.class).get()), RenderSeat::new);
     }
 
     private void registerTileRenderers() {
-        ClientRegistry.bindTileEntitySpecialRenderer(TileGauge.class, new TileEntityGaugeRenderer());
-        ClientRegistry.bindTileEntitySpecialRenderer(TileHelm.class, new TileEntityHelmRenderer());
+        BlockEntityRenderers.register(((BlockEntityType<TileGauge>) DavincisVesselsMod.CONTENT.tileTypes.get(TileGauge.class).get()), x -> new TileEntityGaugeRenderer());
+        BlockEntityRenderers.register(((BlockEntityType<TileHelm>) DavincisVesselsMod.CONTENT.tileTypes.get(TileHelm.class).get()), x -> new TileEntityHelmRenderer());
     }
 
 }

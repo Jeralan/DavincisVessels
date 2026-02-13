@@ -1,13 +1,20 @@
 modLoader="javafml"
-loaderVersion="[25,)"
+loaderVersion="[47,)"
+license="Minecraft Mod Public License"
+issueTrackerURL=""
 [[mods]]
 modId="davincisvessels"
-version="${file.jarVersion}"
+version="${version}"
 displayName="Davincis Vessels"
 description='''
 Craft and create your own vessel...
 And sail it across the seven seas!
 '''
+credits="Created by TridentMC"
+logoFile="davincisvessels_logo.png"
+displayUrl="https://https://github.com/Jeralan/DavincisVessels"
+updateJSONURL=""
+authors="TridentMC, Jeralan"
 
 [[dependencies.davincisvessels]]
     modId="movingworld"

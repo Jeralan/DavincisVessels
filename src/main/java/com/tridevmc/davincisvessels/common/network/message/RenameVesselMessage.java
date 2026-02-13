@@ -1,9 +1,12 @@
 package com.tridevmc.davincisvessels.common.network.message;
 
+import javax.annotation.Nullable;
+
 import com.tridevmc.compound.network.message.Message;
 import com.tridevmc.compound.network.message.RegisteredMessage;
+import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.tileentity.TileHelm;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.fml.LogicalSide;
 
 /**
@@ -26,9 +29,10 @@ public class RenameVesselMessage extends Message {
     }
 
     @Override
-    public void handle(PlayerEntity sender) {
-        if (helm == null)
+    public void handle(@Nullable Player sender) {
+        if (helm == null) {
             return;
+        }
 
         helm.getInfo().setName(newVesselName);
     }

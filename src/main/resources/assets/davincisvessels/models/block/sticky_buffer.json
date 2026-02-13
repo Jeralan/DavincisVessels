@@ -1,6 +1,6 @@
 {
     "parent": "block/cube_all",
     "textures": {
-        "all": "davincisvessels:blocks/sticky_buffer"
+        "all": "davincisvessels:block/sticky_buffer"
     }
 }

@@ -1,25 +1,12 @@
-buildscript {
-    repositories {
-        maven { url = "https://files.minecraftforge.net/maven" }
-        jcenter()
-        mavenCentral()
-    }
-    dependencies {
-        classpath group: "net.minecraftforge.gradle", name: "ForgeGradle", version: "3.+", changing: true
-    }
-}
-
 plugins {
-    id 'com.github.johnrengelman.shadow' version '4.0.4'
+    id 'eclipse'
+    id 'idea'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
 
 apply from: "properties.gradle"
 
 evaluationDependsOn(":MovingWorld")
-
-apply plugin: "net.minecraftforge.gradle"
-//Only edit below this line, the above code adds and enables the necessary things for Forge to be setup.
-apply plugin: "eclipse"
 
 def branch
 if (System.env.BRANCH_NAME) {
@@ -34,24 +21,26 @@ def dirty = !'git diff-index HEAD'.execute().in.text.trim().isEmpty()
 
 version = branch + '-' + modVersion + '.' + commits + (dirty ? '-dirty' : '')
 group = modGroup
-archivesBaseName = modBaseName
 
-sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = "1.8" // Need this here so eclipse task generates correctly.
-
-ext {
-    compoundClassesDir = file('build/classes/java/main')
+base {
+    archivesName = modBaseName
 }
 
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
 configurations {
-    nonModDep
-    runtime.exclude group: "com.tridevmc.MovingWorld"
+    runtimeOnly.exclude group: "com.tridevmc.MovingWorld"
 }
 
 minecraft {
-    mappings channel: "snapshot", version: mappingsVersion
+    mappings channel: "official", version: mappingsVersion
+
+    copyIdeResources = true
 
     runs {
-        client {
+        // applies to all the run configs below
+        configureEach {
             workingDirectory project.file("run")
 
             // Recommended logging data for a userdev environment
@@ -61,42 +50,74 @@ minecraft {
             property "forge.logging.console.level", "debug"
 
             mods {
-                davincisvessels {
-                    sources sourceSets.main
+                "${modBaseName}" {
+                    source sourceSets.main
                 }
                 movingworld {
                     sources project(":MovingWorld").sourceSets.main
                 }
+            }
+        }
+
+        client {
+            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
+            property 'forge.enabledGameTestNamespaces', modBaseName
+
+            for (String s :"-XX:+UseG1GC -Xmx2G -Xms2G -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M".split(" ")) {
+                jvmArgs += s
             }
         }
 
         server {
-            workingDirectory project.file("run")
+            workingDirectory project.file('run')
+            property 'forge.enabledGameTestNamespaces', modBaseName
+            args '--nogui'
+        }
 
-            // Recommended logging data for a userdev environment
-            property "forge.logging.markers", "REGISTRIES"
+        gameTestServer {
+            property 'forge.enabledGameTestNamespaces', modBaseName
+        }
 
-            // Recommended logging level for the console
-            property "forge.logging.console.level", "debug"
+        data {
+            // example of overriding the workingDirectory set in configureEach above
+            workingDirectory project.file("run_data")
 
-            mods {
-                davincisvessels {
-                    sources sourceSets.main
-                }
-                movingworld {
-                    sources project(":MovingWorld").sourceSets.main
-                }
-            }
+            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
+            args '--mod', modBaseName, '--all', '--output', file('davincisvessels_resources_generated/'), '--existing', file('davincisvessels_resources/')
         }
     }
 }
 
-repositories {
-    jcenter()
-    mavenCentral()
-    maven {
-        url 'https://repo.tridevmc.com/'
+sourceSets {
+    main {
+        java {
+            srcDir "src/main/java"
+            // srcDir "MovingWorld/external/compound/src/main/java"
+        }
+        resources {
+            srcDir "src/main/resources"
+            exclude "**/.md" 
+        }
     }
+}
+
+if (gradle.startParameter.taskNames.contains("checkstyle")) {
+    task checkstyle {}
+    tasks["checkstyle"].dependsOn checkstyleApi
+    tasks["checkstyle"].dependsOn checkstyleMain
+
+    tasks["checkstyleApi"].enabled = true
+    tasks["checkstyleMain"].enabled = true
+    tasks["checkstyleTest"].enabled = false
+}
+
+// task setupSubProjects(dependsOn: "MovingWorld:external:compound:buildAll") {
+//     // Just an inter-dependency task
+// }
+
+repositories {
+    // Put repositories for dependencies here
+    // ForgeGradle automatically adds the Forge maven and Maven Central for you
 }
 
 dependencies {
@@ -104,37 +125,38 @@ dependencies {
 
     minecraft "net.minecraftforge:forge:${forgeVersion}"
 
-    compile "com.tridevmc.compound:compound-all:${compoundVersion}"
-    nonModDep "com.tridevmc.compound:compound-all:${compoundVersion}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
-task extractNonMod(type: Copy) {
-    project.compoundClassesDir.delete()
-    project.compoundClassesDir.mkdirs()
-    from zipTree(project.configurations.nonModDep.find { it.name.startsWith("compound") })
-    into project.compoundClassesDir
-}
-
-compileJava.dependsOn(extractNonMod)
-
-shadowJar {
-    classifier = ""
-
-    dependencies {
-        include(dependency("com.tridevmc.compound:compound-all:${compoundVersion}"))
+tasks.named('processResources', ProcessResources).configure {
+    duplicatesStrategy(DuplicatesStrategy.EXCLUDE)
+    var replaceProperties = [
+            version: version
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
     }
-
-    relocate "com.tridevmc.compound", "${group}.compound"
 }
 
-tasks.build.dependsOn shadowJar
+compileJava {
+    options.compilerArgs << "-Xmaxerrs" << "2000"
+    options.compilerArgs << "-Xmaxwarns" << "2"
+    options.compilerArgs << "-Xlint:all"
+    options.compilerArgs << "-Xdiags:verbose"
+    options.compilerArgs << "-encoding" << "UTF-8"
+}
 
-artifacts {
-    archives shadowJar
+javadoc {
+    options.setUse(true)
+    options.addStringsOption("Xmaxerrs").setValue(["2000"])
+    options.addStringsOption("Xmaxwarns").setValue(["2000"])
+    options.addStringsOption("Xdoclint:all")
+    options.setEncoding("UTF-8")
 }
 
 // Example for how to get properties into the manifest for reading by the runtime..
-jar {
+tasks.named('jar', Jar).configure {
     manifest {
         attributes(["Specification-Title"     : "Davincis Vessels",
                     "Specification-Vendor"    : "Trident",
@@ -144,4 +166,13 @@ jar {
                     "Implementation-Vendor"   : "Trident",
                     "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")],)
     }
+
+    // This is the preferred method to reobfuscate your jar file
+    finalizedBy 'reobfJar'
 }
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+jar.enabled = true

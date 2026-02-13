@@ -2,53 +2,57 @@ package com.tridevmc.davincisvessels.common.entity;
 
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.movingworld.common.util.Vec3dMod;
-import net.minecraft.block.BlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntitySize;
-import net.minecraft.entity.MoverType;
-import net.minecraft.entity.Pose;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.IPacket;
-import net.minecraft.network.PacketBuffer;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraftforge.fml.common.registry.IEntityAdditionalSpawnData;
-import net.minecraftforge.fml.network.NetworkHooks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 public class EntityParachute extends Entity implements IEntityAdditionalSpawnData {
 
-    public EntityParachute(World world) {
-        super(DavincisVesselsMod.CONTENT.entityTypes.get(EntityParachute.class), world);
+    public EntityParachute(Level world) {
+        super(DavincisVesselsMod.CONTENT.entityTypes.get(EntityParachute.class).get(), world);
     }
 
-    public EntityParachute(World world, EntityVessel vessel, BlockPos pos) {
+    public EntityParachute(Level world, EntityVessel vessel, BlockPos pos) {
         this(world);
         Vec3dMod vec = new Vec3dMod(pos.getX() - vessel.getMobileChunk().getCenterX(), pos.getY() - vessel.getMobileChunk().minY(), pos.getZ() - vessel.getMobileChunk().getCenterZ());
-        vec = vec.rotateAroundY((float) Math.toRadians(vessel.rotationYaw));
+        vec = vec.rotateAroundY((float) Math.toRadians(vessel.getYRot()));
 
-        setLocationAndAngles(vessel.posX + vec.x, vessel.posY + vec.y - 2D, vessel.posZ + vec.z, 0F, 0F);
-        this.setMotion(vessel.getMotion());
+        moveTo(vessel.getX() + vec.x, vessel.getY() + vec.y - 2D, vessel.getZ() + vec.z, 0F, 0F);
+        this.setDeltaMovement(vessel.getDeltaMovement());
     }
 
-    public EntityParachute(World world, Entity mounter, Vec3dMod vec, Vec3dMod vesselPos, Vec3dMod motion) {
+    public EntityParachute(Level world, Entity mounter, Vec3dMod vec, Vec3dMod vesselPos, Vec3dMod motion) {
         this(world);
 
-        setLocationAndAngles(vesselPos.x + vec.x, vesselPos.y + vec.y - 2D, vesselPos.z + vec.z, 0F, 0F);
-        this.setMotion(motion);
+        moveTo(vesselPos.x + vec.x, vesselPos.y + vec.y - 2D, vesselPos.z + vec.z, 0F, 0F);
+        this.setDeltaMovement(motion);
 
         mounter.stopRiding();
         mounter.startRiding(this, true);
     }
 
     @Override
-    public EntitySize getSize(Pose poseIn) {
-        return new EntitySize(1, 1, true);
+    public EntityDimensions getDimensions(@Nonnull Pose poseIn) {
+        return new EntityDimensions(1, 1, true);
     }
 
     @Override
-    protected void registerData() {
+    protected void defineSynchedData() {
         // NO-OP
     }
 
@@ -56,37 +60,37 @@ public class EntityParachute extends Entity implements IEntityAdditionalSpawnDat
     public void tick() {
         super.tick();
 
-        prevPosX = posX;
-        prevPosY = posY;
-        prevPosZ = posZ;
+        xOld = getX();
+        yOld = getY();
+        zOld = getZ();
 
-        if (!world.isRemote
+        if (!level().isClientSide
                 &&
                 (getControllingPassenger() == null
-                        || onGround
+                        || onGround()
                         || isInWater())) {
-            remove();
+            remove(RemovalReason.DISCARDED);
             return;
         }
 
-        if (!world.isRemote && getControllingPassenger() != null) {
-            this.setMotion(this.getMotion().add(getControllingPassenger().getMotion().x, 0, getControllingPassenger().getMotion().z));
+        if (!level().isClientSide && getControllingPassenger() != null) {
+            this.setDeltaMovement(this.getDeltaMovement().add(getControllingPassenger().getDeltaMovement().x, 0, getControllingPassenger().getDeltaMovement().z));
         }
-        if (getMotion().y > -.5)
-            this.setMotion(this.getMotion().subtract(0, 0.025D, 0));
+        if (getDeltaMovement().y > -.5)
+            this.setDeltaMovement(this.getDeltaMovement().subtract(0, 0.025D, 0));
 
-        move(MoverType.SELF, this.getMotion());
+        move(MoverType.SELF, this.getDeltaMovement());
     }
 
     @Override
     @Nullable
-    public Entity getControllingPassenger() {
-        return this.getPassengers().stream().findAny().orElse(null);
+    public LivingEntity getControllingPassenger() {
+        return (LivingEntity) this.getPassengers().stream().findAny().orElse(null);
     }
 
     @Override
-    public IPacket<?> createSpawnPacket() {
-        return NetworkHooks.getEntitySpawningPacket(this);
+    public Packet<ClientGamePacketListener> getAddEntityPacket() {
+        return new ClientboundAddEntityPacket(this);
     }
 
     @Override
@@ -100,39 +104,39 @@ public class EntityParachute extends Entity implements IEntityAdditionalSpawnDat
     }
 
     @Override
-    protected void readAdditional(CompoundNBT compound) {
+    protected void readAdditionalSaveData(@Nonnull CompoundTag compound) {
         // NO-OP
     }
 
     @Override
-    protected void writeAdditional(CompoundNBT compound) {
+    protected void addAdditionalSaveData(@Nonnull CompoundTag compound) {
         // NO-OP
     }
 
     @Override
-    protected void updateFallState(double y, boolean onGroundIn, BlockState state, BlockPos pos) {
-        // NO-OP
+    protected void checkFallDamage(double y, boolean onGroundIn, BlockState state, BlockPos pos) {
+        // No-OP
     }
 
     @Override
-    public void fall(float fallDistance, float damageMult) {
-        // NO-OP
+    public boolean causeFallDamage(float fallDistance, float damageMult, DamageSource damageSource) {
+        return false;
     }
 
     @Override
-    public void writeSpawnData(PacketBuffer buffer) {
+    public void writeSpawnData(FriendlyByteBuf buffer) {
         buffer.writeBoolean(getControllingPassenger() != null);
         if (getControllingPassenger() != null) {
-            buffer.writeInt(getControllingPassenger().getEntityId());
+            buffer.writeInt(getControllingPassenger().getId());
         }
     }
 
     @Override
-    public void readSpawnData(PacketBuffer additionalData) {
-        if (additionalData.readBoolean() && world != null) {
+    public void readSpawnData(FriendlyByteBuf additionalData) {
+        if (additionalData.readBoolean() && level() != null) {
             int entityID = additionalData.readInt();
-            if (world.getEntityByID(entityID) != null) {
-                world.getEntityByID(entityID).startRiding(this);
+            if (level().getEntity(entityID) != null) {
+                level().getEntity(entityID).startRiding(this);
             }
         }
     }

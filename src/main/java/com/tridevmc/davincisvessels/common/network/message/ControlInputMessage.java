@@ -1,9 +1,11 @@
 package com.tridevmc.davincisvessels.common.network.message;
 
+import javax.annotation.Nullable;
+
 import com.tridevmc.compound.network.message.Message;
 import com.tridevmc.compound.network.message.RegisteredMessage;
 import com.tridevmc.davincisvessels.common.entity.EntityVessel;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.fml.LogicalSide;
 
 @RegisteredMessage(channel = "davincisvessels", destination = LogicalSide.SERVER)
@@ -23,7 +25,7 @@ public class ControlInputMessage extends Message {
     }
 
     @Override
-    public void handle(PlayerEntity sender) {
+    public void handle(@Nullable Player sender) {
         if (vessel == null)
             return;
 

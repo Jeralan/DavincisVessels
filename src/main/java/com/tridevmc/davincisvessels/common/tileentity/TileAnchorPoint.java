@@ -9,66 +9,73 @@ import com.tridevmc.movingworld.api.IMovingTile;
 import com.tridevmc.movingworld.common.chunk.mobilechunk.MobileChunk;
 import com.tridevmc.movingworld.common.entity.EntityMovingWorld;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.renderer.texture.ITickable;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.inventory.ItemStackHelper;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SUpdateTileEntityPacket;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.ServerWorld;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.level.block.entity.TickingBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.Container;
+import net.minecraft.world.ContainerHelper;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.Objects;
 
-public class TileAnchorPoint extends TileEntity implements IMovingTile, IInventory, ITickable, IElementProvider<ContainerAnchorPoint> {
+public class TileAnchorPoint extends BlockEntity implements IMovingTile, Container, IElementProvider<ContainerAnchorPoint> {
 
     public ItemStack content;
     public BlockPos chunkPos;
     private AnchorInstance instance;
     private EntityMovingWorld activeVessel;
 
-    public TileAnchorPoint() {
-        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileAnchorPoint.class));
+    public TileAnchorPoint(BlockPos pos, BlockState state) {
+        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileAnchorPoint.class).get(), pos, state);
         activeVessel = null;
         instance = new AnchorInstance();
         content = ItemStack.EMPTY;
     }
 
     public static boolean isItemAnchor(ItemStack itemstack) {
-        return itemstack != ItemStack.EMPTY && Objects.equals(itemstack.getItem(), Item.getItemFromBlock(DavincisVesselsMod.CONTENT.blockAnchorPoint));
+        return itemstack != ItemStack.EMPTY && Objects.equals(itemstack.getItem(), Item.BY_BLOCK.get(DavincisVesselsMod.CONTENT.blockAnchorPoint));
     }
 
     @Nullable
     @Override
-    public SUpdateTileEntityPacket getUpdatePacket() {
-        return new SUpdateTileEntityPacket(this.pos, 0, this.getUpdateTag());
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this, x -> this.getUpdateTag());
     }
 
     @Override
-    public CompoundNBT getUpdateTag() {
-        return this.write(new CompoundNBT());
+    public CompoundTag getUpdateTag() {
+        CompoundTag out = new CompoundTag();
+        this.saveAdditional(out);
+        return out;
     }
 
     @Override
-    public void onDataPacket(NetworkManager net, SUpdateTileEntityPacket packet) {
-        read(packet.getNbtCompound());
-        world.markForRerender(pos);
+    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket packet) {
+        load(packet.getTag());
+        level.blockEntityChanged(getBlockPos());
 
         if (FMLEnvironment.dist.isClient()) {
-            if (Minecraft.getInstance().currentScreen instanceof GuiAnchorPoint) {
-                GuiAnchorPoint activeGUI = (GuiAnchorPoint) Minecraft.getInstance().currentScreen;
-                if (Objects.equals(activeGUI.anchorPoint.pos, this.pos)) {
+            if (Minecraft.getInstance().screen instanceof GuiAnchorPoint) {
+                GuiAnchorPoint activeGUI = (GuiAnchorPoint) Minecraft.getInstance().screen;
+                if (Objects.equals(activeGUI.anchorPoint.getBlockPos(), worldPosition)) {
                     activeGUI.init();
                 }
             }
@@ -76,53 +83,51 @@ public class TileAnchorPoint extends TileEntity implements IMovingTile, IInvento
     }
 
     @Override
-    public void read(CompoundNBT tag) {
-        super.read(tag);
-        if (world != null && tag.contains("vehicle") && world != null) {
+    public void load(@Nonnull CompoundTag tag) {
+        super.load(tag);
+        if (level != null && tag.contains("vehicle") && level != null) {
             int id = tag.getInt("vehicle");
-            Entity entity = world.getEntityByID(id);
+            Entity entity = level.getEntity(id);
             if (entity instanceof EntityMovingWorld) {
                 activeVessel = (EntityMovingWorld) entity;
             }
         }
 
-        CompoundNBT instanceCompound = tag.getCompound("INSTANCE");
+        CompoundTag instanceCompound = tag.getCompound("INSTANCE");
         if (instanceCompound.getBoolean("INSTANCE")) {
             instance = new AnchorInstance();
             instance.deserializeNBT(instanceCompound);
         }
 
         if (tag.contains("item")) {
-            content = ItemStack.read(tag.getCompound("item"));
+            content = ItemStack.of(tag.getCompound("item"));
         } else {
             content = ItemStack.EMPTY;
         }
     }
 
     @Override
-    public CompoundNBT write(CompoundNBT tag) {
-        tag = super.write(tag);
+    public void saveAdditional(@Nonnull CompoundTag tag) {
+        super.saveAdditional(tag);
         if (activeVessel != null && !activeVessel.isAlive()) {
-            tag.putInt("vehicle", activeVessel.getEntityId());
+            tag.putInt("vehicle", activeVessel.getId());
         }
 
         if (instance != null) {
-            CompoundNBT instanceCompound = instance.serializeNBT();
+            CompoundTag instanceCompound = instance.serializeNBT();
             tag.put("INSTANCE", instanceCompound);
         }
 
         if (content == ItemStack.EMPTY) {
             tag.remove("item");
         } else {
-            content.write(tag.getCompound("item"));
+            content.save(tag.getCompound("item"));
         }
-
-        return tag;
     }
 
     @Override
     public void setParentMovingWorld(EntityMovingWorld movingWorld, BlockPos chunkPos) {
-        chunkPos = pos;
+        chunkPos = worldPosition;
         activeVessel = movingWorld;
     }
 
@@ -161,11 +166,11 @@ public class TileAnchorPoint extends TileEntity implements IMovingTile, IInvento
 
     @Override
     public String toString() {
-        return String.format("TileAnchorPoint at {X: %s Y: %s Z: %s} with state {%s} and INSTANCE {%s}", pos.getX(), pos.getY(), pos.getZ(), world.getBlockState(pos), instance.toString());
+        return String.format("TileAnchorPoint at {X: %s Y: %s Z: %s} with state {%s} and INSTANCE {%s}", worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(), level.getBlockState(worldPosition), instance.toString());
     }
 
     @Override
-    public int getSizeInventory() {
+    public int getContainerSize() {
         return 1;
     }
 
@@ -176,7 +181,7 @@ public class TileAnchorPoint extends TileEntity implements IMovingTile, IInvento
 
     @Nullable
     @Override
-    public ItemStack getStackInSlot(int index) {
+    public ItemStack getItem(int index) {
         if (index != 0) {
             throw new IndexOutOfBoundsException();
         } else return content;
@@ -184,8 +189,8 @@ public class TileAnchorPoint extends TileEntity implements IMovingTile, IInvento
 
     @Nullable
     @Override
-    public ItemStack decrStackSize(int index, int count) {
-        ItemStack splitResult = ItemStackHelper.getAndSplit(Lists.newArrayList(content), index, count);
+    public ItemStack removeItem(int index, int count) {
+        ItemStack splitResult = ContainerHelper.removeItem(Lists.newArrayList(content), index, count);
         content = splitResult;
         return splitResult;
     }
@@ -195,76 +200,75 @@ public class TileAnchorPoint extends TileEntity implements IMovingTile, IInvento
      */
     @Nullable
     @Override
-    public ItemStack removeStackFromSlot(int index) {
-        ItemStack removeResult = ItemStackHelper.getAndRemove(Lists.newArrayList(content), index);
+    public ItemStack removeItemNoUpdate(int index) {
+        ItemStack removeResult = ContainerHelper.takeItem(Lists.newArrayList(content), index);
         content = removeResult;
         return removeResult;
     }
 
     @Override
-    public void setInventorySlotContents(int index, @Nullable ItemStack stack) {
+    public void setItem(int index, @Nullable ItemStack stack) {
         if (index != 0)
             throw new IndexOutOfBoundsException();
 
         this.content = stack;
-        if (stack != ItemStack.EMPTY && stack.getCount() > this.getInventoryStackLimit()) {
-            stack.setCount(this.getInventoryStackLimit());
+        if (stack != ItemStack.EMPTY && stack.getCount() > this.getMaxStackSize()) {
+            stack.setCount(this.getMaxStackSize());
         }
     }
 
     @Override
-    public int getInventoryStackLimit() {
+    public int getMaxStackSize() {
         return 1;
     }
 
     @Override
-    public boolean isUsableByPlayer(PlayerEntity player) {
-        return this.world.getTileEntity(this.pos) != this ? false : player.getDistanceSq((double) this.pos.getX() + 0.5D, (double) this.pos.getY() + 0.5D, (double) this.pos.getZ() + 0.5D) <= 64.0D;
+    public boolean stillValid(@Nonnull Player player) {
+        return level != null && this.level.getBlockEntity(this.worldPosition) != this ? false : player.distanceToSqr((double) this.worldPosition.getX() + 0.5D, (double) this.worldPosition.getY() + 0.5D, (double) this.worldPosition.getZ() + 0.5D) <= 64.0D;
     }
 
     @Override
-    public void openInventory(PlayerEntity player) {
-
-    }
-
-    @Override
-    public void closeInventory(PlayerEntity player) {
+    public void startOpen(@Nonnull Player player) {
 
     }
 
     @Override
-    public boolean isItemValidForSlot(int index, ItemStack stack) {
+    public void stopOpen(@Nonnull Player player) {
+
+    }
+
+    @Override
+    public boolean canPlaceItem(int index, @Nonnull ItemStack stack) {
         boolean accepted = index == 0 &&
-                (stack == ItemStack.EMPTY || Objects.equals(stack.getItem(), Item.getItemFromBlock(DavincisVesselsMod.CONTENT.blockAnchorPoint)));
+                (stack == ItemStack.EMPTY || Objects.equals(stack.getItem(), Item.BY_BLOCK.get(DavincisVesselsMod.CONTENT.blockAnchorPoint)));
         return accepted;
     }
 
     @Override
-    public void clear() {
+    public void clearContent() {
         content = ItemStack.EMPTY;
     }
 
-    @Override
     public void tick() {
         if (instance != null && instance.hasChanged()) {
             instance.setChanged(false);
 
-            if (world instanceof ServerWorld) {
-                world.getChunk(pos).setModified(true);
-                markDirty();
+            if (level instanceof ServerLevel) {
+                level.getChunk(worldPosition).setUnsaved(true);
+                setChanged();
             }
         }
     }
 
     @Override
     @OnlyIn(Dist.CLIENT)
-    public Screen createScreen(ContainerAnchorPoint container, PlayerEntity player) {
+    public AbstractContainerScreen<ContainerAnchorPoint> createScreen(ContainerAnchorPoint container, Player player) {
         return new GuiAnchorPoint(container);
     }
 
     @Nullable
     @Override
-    public ContainerAnchorPoint createMenu(int window, PlayerInventory playerInv, PlayerEntity player) {
+    public ContainerAnchorPoint createMenu(int window, @Nonnull Inventory playerInv, @Nonnull Player player) {
         return new ContainerAnchorPoint(window, this, player);
     }
 

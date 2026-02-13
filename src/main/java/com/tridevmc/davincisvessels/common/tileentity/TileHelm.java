@@ -1,5 +1,7 @@
 package com.tridevmc.davincisvessels.common.tileentity;
 
+import javax.annotation.Nonnull;
+
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.client.gui.ContainerHelm;
 import com.tridevmc.davincisvessels.client.gui.GuiHelm;
@@ -13,13 +15,15 @@ import com.tridevmc.movingworld.common.chunk.mobilechunk.MobileChunk;
 import com.tridevmc.movingworld.common.entity.EntityMovingWorld;
 import com.tridevmc.movingworld.common.entity.MovingWorldInfo;
 import com.tridevmc.movingworld.common.tile.TileMovingMarkingBlock;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.container.Container;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
@@ -31,13 +35,13 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
     private MovingWorldInfo info;
     private BlockPos chunkPos;
 
-    public TileHelm() {
-        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileHelm.class));
+    public TileHelm(BlockPos pos, BlockState state) {
+        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileHelm.class).get(), pos, state);
         activeVessel = null;
     }
 
     @Override
-    public void assembledMovingWorld(PlayerEntity player, boolean returnVal) {
+    public void assembledMovingWorld(Player player, boolean returnVal) {
         sendAssembleResult(player, false);
         sendAssembleResult(player, true);
 
@@ -47,7 +51,7 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
 
     @Override
     public void setParentMovingWorld(EntityMovingWorld movingWorld, BlockPos chunkPos) {
-        chunkPos = pos;
+        chunkPos = worldPosition;
         activeVessel = (EntityVessel) movingWorld;
     }
 
@@ -77,6 +81,7 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
     }
 
     @Override
+    @Nonnull
     public MovingWorldAssemblyInteractor getInteractor() {
         if (interactor == null) {
             interactor = new VesselAssemblyInteractor();
@@ -85,11 +90,12 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
     }
 
     @Override
-    public void setInteractor(MovingWorldAssemblyInteractor interactor) {
+    public void setInteractor(@Nonnull MovingWorldAssemblyInteractor interactor) {
         this.interactor = (VesselAssemblyInteractor) interactor;
     }
 
     @Override
+    @Nonnull
     public MovingWorldInfo getInfo() {
         if (this.info == null)
             this.info = new MovingWorldInfo();
@@ -97,7 +103,7 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
     }
 
     @Override
-    public void setInfo(MovingWorldInfo info) {
+    public void setInfo(@Nonnull MovingWorldInfo info) {
         this.info = info;
     }
 
@@ -107,12 +113,12 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
     }
 
     @Override
-    public EntityMovingWorld getMovingWorld(World worldObj) {
+    public EntityMovingWorld getMovingWorld(Level worldObj) {
         return new EntityVessel(worldObj);
     }
 
     @Override
-    public void mountedMovingWorld(PlayerEntity player, EntityMovingWorld movingWorld, MountStage stage) {
+    public void mountedMovingWorld(Player player, EntityMovingWorld movingWorld, MountStage stage) {
         switch (stage) {
             case PREMSG: {
                 sendAssembleResult(player, false);
@@ -127,7 +133,7 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
     }
 
     @Override
-    public void undoCompilation(PlayerEntity player) {
+    public void undoCompilation(Player player) {
         super.undoCompilation(player);
         sendAssembleResult(player, false);
         sendAssembleResult(player, true);
@@ -138,8 +144,8 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
         return new VesselAssemblyInteractor();
     }
 
-    public void sendAssembleResult(PlayerEntity player, boolean sendPrev) {
-        if (!world.isRemote) {
+    public void sendAssembleResult(Player player, boolean sendPrev) {
+        if (level != null && !level.isClientSide) {
             AssembleResult res;
             if (sendPrev) {
                 res = getPrevAssembleResult();
@@ -157,26 +163,25 @@ public class TileHelm extends TileMovingMarkingBlock implements IElementProvider
     }
 
     @Override
-    public CompoundNBT write(CompoundNBT tag) {
-        tag = super.write(tag);
+    public void saveAdditional(@Nonnull CompoundTag tag) {
+        super.saveAdditional(tag);
         tag.putBoolean("submergeVesselOnAssemble", submerge);
-        return tag;
     }
 
     @Override
-    public void read(CompoundNBT tag) {
-        super.read(tag);
+    public void load(@Nonnull CompoundTag tag) {
+        super.load(tag);
         submerge = tag.getBoolean("submergeVesselOnAssemble");
     }
 
     @Override
-    public Container createMenu(int window, PlayerInventory playerInventory, PlayerEntity player) {
+    public AbstractContainerMenu createMenu(int window, @Nonnull Inventory playerInventory, @Nonnull Player player) {
         return new ContainerHelm(window, this, player);
     }
 
     @Override
     @OnlyIn(Dist.CLIENT)
-    public Screen createScreen(ContainerHelm container, PlayerEntity player) {
+    public AbstractContainerScreen<ContainerHelm> createScreen(ContainerHelm container, Player player) {
         return new GuiHelm(container);
     }
 }

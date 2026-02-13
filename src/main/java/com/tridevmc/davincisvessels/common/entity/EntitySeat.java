@@ -1,31 +1,36 @@
 package com.tridevmc.davincisvessels.common.entity;
 
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.IPacket;
-import net.minecraft.network.datasync.DataParameter;
-import net.minecraft.network.datasync.DataSerializers;
-import net.minecraft.network.datasync.EntityDataManager;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraftforge.fml.network.NetworkHooks;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.network.NetworkHooks;
 
 import java.util.Objects;
 
+import javax.annotation.Nonnull;
+
 public class EntitySeat extends Entity {
 
-    private static final DataParameter<BlockPos> CHUNK_POS = EntityDataManager.createKey(EntitySeat.class, DataSerializers.BLOCK_POS);
-    private static final DataParameter<Integer> VESSEL_ID = EntityDataManager.createKey(EntitySeat.class, DataSerializers.VARINT);
+    private static final EntityDataAccessor<BlockPos> CHUNK_POS = SynchedEntityData.defineId(EntitySeat.class, EntityDataSerializers.BLOCK_POS);
+    private static final EntityDataAccessor<Integer> VESSEL_ID = SynchedEntityData.defineId(EntitySeat.class, EntityDataSerializers.INT);
 
-    public EntitySeat(World worldIn) {
-        super(DavincisVesselsMod.CONTENT.entityTypes.get(EntitySeat.class), worldIn);
+    public EntitySeat(Level worldIn) {
+        super(DavincisVesselsMod.CONTENT.entityTypes.get(EntitySeat.class).get(), worldIn);
     }
 
     public void setupVessel(EntityVessel vessel, BlockPos chunkPos) {
-        setPosition(vessel.posX, vessel.posY, vessel.posZ);
+        moveTo(vessel.getX(), vessel.getY(), vessel.getZ());
         setVessel(vessel);
         setChunkPos(chunkPos);
     }
@@ -40,48 +45,48 @@ public class EntitySeat extends Entity {
     }
 
     @Override
-    protected void readAdditional(CompoundNBT compound) {
+    protected void readAdditionalSaveData(@Nonnull CompoundTag compound) {
     }
 
     @Override
-    protected void writeAdditional(CompoundNBT compound) {
+    protected void addAdditionalSaveData(@Nonnull CompoundTag compound) {
     }
 
     @Override
-    public boolean processInitialInteract(PlayerEntity player, Hand hand) {
-        if (player.isSneaking()) {
-            return false;
-        } else if (this.isBeingRidden()) {
-            return true;
+    public InteractionResult interact(@Nonnull Player player, @Nonnull InteractionHand hand) {
+        if (player.isCrouching()) {
+            return InteractionResult.FAIL;
+        } else if (this.getPassengers().size() > 0) {
+            return InteractionResult.SUCCESS;
         } else {
-            if (!this.world.isRemote) {
+            if (!this.level().isClientSide) {
                 player.startRiding(this);
             }
 
-            return true;
+            return InteractionResult.SUCCESS;
         }
     }
 
     @Override
-    public void registerData() {
-        this.dataManager.register(CHUNK_POS, BlockPos.ZERO);
-        this.dataManager.register(VESSEL_ID, 0);
+    public void defineSynchedData() {
+        this.entityData.define(CHUNK_POS, BlockPos.ZERO);
+        this.entityData.define(VESSEL_ID, 0);
     }
 
     public boolean setChunkPos(BlockPos chunkPos) {
         if (!getChunkPos().equals(chunkPos)) {
-            dataManager.set(CHUNK_POS, chunkPos);
+            entityData.set(CHUNK_POS, chunkPos);
             return true;
         }
         return false;
     }
 
     public BlockPos getChunkPos() {
-        return dataManager.get(CHUNK_POS);
+        return entityData.get(CHUNK_POS);
     }
 
     public EntityVessel getVessel() {
-        Entity foundEntity = world.getEntityByID(dataManager.get(VESSEL_ID));
+        Entity foundEntity = level().getEntity(entityData.get(VESSEL_ID));
         EntityVessel vessel = null;
 
         if (foundEntity instanceof EntityVessel)
@@ -91,44 +96,34 @@ public class EntitySeat extends Entity {
     }
 
     public int getVesselId() {
-        return dataManager.get(VESSEL_ID);
+        return entityData.get(VESSEL_ID);
     }
 
     // Passenger code below.
 
     @Override
-    public double getMountedYOffset() {
+    public double getPassengersRidingOffset() {
         return -0.3D;
     }
 
     @Override
-    public void updatePassenger(Entity passenger) {
-        super.updatePassenger(passenger);
+    public LivingEntity getControllingPassenger() {
+        return this.getPassengers().isEmpty() ? null : (LivingEntity) this.getPassengers().get(0);
     }
 
     @Override
-    public Entity getControllingPassenger() {
-        return this.getPassengers().isEmpty() ? null : this.getPassengers().get(0);
-    }
-
-    @Override
-    public boolean canPassengerSteer() {
-        return false;
-    }
-
-    @Override
-    public IPacket<?> createSpawnPacket() {
+    public Packet<ClientGamePacketListener> getAddEntityPacket() {
         return NetworkHooks.getEntitySpawningPacket(this);
     }
 
     @Override
-    public boolean canFitPassenger(Entity passenger) {
+    public boolean canAddPassenger(@Nonnull Entity passenger) {
         return this.getPassengers().size() < 1;
     }
 
     public boolean setVessel(EntityVessel vessel) {
-        if (vessel != null && !Objects.equals(getVesselId(), vessel.getEntityId())) {
-            dataManager.set(VESSEL_ID, vessel.getEntityId());
+        if (vessel != null && !Objects.equals(getVesselId(), vessel.getId())) {
+            entityData.set(VESSEL_ID, vessel.getId());
             return true;
         }
         return false;

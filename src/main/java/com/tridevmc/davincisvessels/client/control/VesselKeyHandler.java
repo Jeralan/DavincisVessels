@@ -9,7 +9,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.event.TickEvent;
 
 @OnlyIn(Dist.CLIENT)
 public class VesselKeyHandler {
@@ -23,32 +23,32 @@ public class VesselKeyHandler {
     }
 
     @SubscribeEvent
-    public void keyPress(InputEvent.KeyInputEvent e) {
+    public void keyPress(InputEvent.Key e) {
     }
 
     @SubscribeEvent
     public void updateControl(TickEvent.PlayerTickEvent e) {
         if (e.phase == TickEvent.Phase.START && e.side == LogicalSide.CLIENT
                 && e.player == Minecraft.getInstance().player
-                && e.player.getRidingEntity() instanceof EntityVessel) {
-            EntityVessel vessel = (EntityVessel) e.player.getRidingEntity();
-            if (keybinds.kbVesselInv.isKeyDown() && !kbVesselGuiPrevState) {
-                new OpenGuiMessage(vessel.getEntityId()).sendToServer();
+                && e.player.getVehicle() instanceof EntityVessel) {
+            EntityVessel vessel = (EntityVessel) e.player.getVehicle();
+            if (keybinds.kbVesselInv.isDown() && !kbVesselGuiPrevState && vessel != null) {
+                new OpenGuiMessage(vessel.getId()).sendToServer();
             }
-            kbVesselGuiPrevState = keybinds.kbVesselInv.isKeyDown();
+            kbVesselGuiPrevState = keybinds.kbVesselInv.isDown();
 
-            if (keybinds.kbDisassemble.isKeyDown() && !kbDisassemblePrevState) {
+            if (keybinds.kbDisassemble.isDown() && !kbDisassemblePrevState) {
                 MovingWorldClientAction.DISASSEMBLE.sendToServer(vessel);
             }
-            kbDisassemblePrevState = keybinds.kbDisassemble.isKeyDown();
+            kbDisassemblePrevState = keybinds.kbDisassemble.isDown();
 
-            if (keybinds.kbAlign.isKeyDown() && !kbAlignPrevState) {
+            if (keybinds.kbAlign.isDown() && !kbAlignPrevState) {
                 MovingWorldClientAction.ALIGN.sendToServer(vessel);
             }
-            kbAlignPrevState = keybinds.kbAlign.isKeyDown();
+            kbAlignPrevState = keybinds.kbAlign.isDown();
 
             int c = getControlCode();
-            if (c != vessel.getController().getVesselControl()) {
+            if (vessel != null && c != vessel.getController().getVesselControl()) {
                 vessel.getController().updateControl(vessel, e.player, c);
             }
         }
@@ -56,11 +56,11 @@ public class VesselKeyHandler {
 
 
     public int getControlCode() {
-        if (keybinds.kbAlign.isKeyDown()) return 4;
-        if (keybinds.kbBrake.isKeyDown()) return 3;
+        if (keybinds.kbAlign.isDown()) return 4;
+        if (keybinds.kbBrake.isDown()) return 3;
         int vert = 0;
-        if (keybinds.kbUp.isKeyDown()) vert++;
-        if (keybinds.kbDown.isKeyDown()) vert--;
+        if (keybinds.kbUp.isDown()) vert++;
+        if (keybinds.kbDown.isDown()) vert--;
         return vert == 0 ? 0 : vert < 0 ? 1 : vert > 0 ? 2 : 0;
     }
 }

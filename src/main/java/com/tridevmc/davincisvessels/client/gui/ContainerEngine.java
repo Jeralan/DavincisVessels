@@ -1,20 +1,22 @@
 package com.tridevmc.davincisvessels.client.gui;
 
+import javax.annotation.Nonnull;
+
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.tileentity.TileEngine;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.inventory.container.Container;
-import net.minecraft.inventory.container.Slot;
-import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.FurnaceTileEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.Container;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.FurnaceBlockEntity;
 
-public class ContainerEngine extends Container {
+public class ContainerEngine extends AbstractContainerMenu {
     public final TileEngine engine;
-    public final PlayerEntity player;
+    public final Player player;
 
-    public ContainerEngine(int window, TileEngine engine, PlayerEntity player) {
+    public ContainerEngine(int window, TileEngine engine, Player player) {
         super(DavincisVesselsMod.CONTENT.universalContainerType, window);
         this.engine = engine;
         this.player = player;
@@ -24,10 +26,10 @@ public class ContainerEngine extends Container {
         addSlot(new SlotFuel(engine, 2, 26, 41));
         addSlot(new SlotFuel(engine, 3, 44, 41));
 
-        bindPlayerInventory(player.inventory);
+        bindPlayerInventory(player.getInventory());
     }
 
-    protected void bindPlayerInventory(PlayerInventory inventoryplayer) {
+    protected void bindPlayerInventory(Inventory inventoryplayer) {
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 9; j++) {
                 addSlot(new Slot(inventoryplayer, j + i * 9 + 9, 8 + j * 18, 84 + i * 18));
@@ -40,8 +42,8 @@ public class ContainerEngine extends Container {
     }
 
     @Override
-    public boolean canInteractWith(PlayerEntity player) {
-        return engine.isUsableByPlayer(player);
+    public boolean stillValid(@Nonnull Player player) {
+        return engine.stillValid(player);
     }
 
     /**
@@ -49,26 +51,26 @@ public class ContainerEngine extends Container {
      * someone does that.
      */
     @Override
-    public ItemStack transferStackInSlot(PlayerEntity par1EntityPlayer, int slotNum) {
+    public ItemStack quickMoveStack(@Nonnull Player par1EntityPlayer, int slotNum) {
         ItemStack stackClone = ItemStack.EMPTY;
-        Slot slot = this.inventorySlots.get(slotNum);
+        Slot slot = this.slots.get(slotNum);
 
-        if (slot != null && slot.getHasStack()) {
-            ItemStack stack = slot.getStack();
+        if (slot != null && slot.hasItem()) {
+            ItemStack stack = slot.getItem();
             stackClone = stack.copy();
 
-            if (slotNum < this.engine.getSizeInventory()) {
-                if (!this.mergeItemStack(stack, this.engine.getSizeInventory(), this.inventorySlots.size(), true)) {
+            if (slotNum < this.engine.getContainerSize()) {
+                if (!this.moveItemStackTo(stack, this.engine.getContainerSize(), this.slots.size(), true)) {
                     return ItemStack.EMPTY;
                 }
-            } else if (!this.mergeItemStack(stack, 0, this.engine.getSizeInventory(), false)) {
+            } else if (!this.moveItemStackTo(stack, 0, this.engine.getContainerSize(), false)) {
                 return ItemStack.EMPTY;
             }
 
             if (stack.getCount() == 0) {
-                slot.putStack(ItemStack.EMPTY);
+                slot.set(ItemStack.EMPTY);
             } else {
-                slot.onSlotChanged();
+                slot.setChanged();
             }
         }
 
@@ -76,13 +78,13 @@ public class ContainerEngine extends Container {
     }
 
     public static class SlotFuel extends Slot {
-        public SlotFuel(IInventory inventory, int id, int x, int y) {
+        public SlotFuel(Container inventory, int id, int x, int y) {
             super(inventory, id, x, y);
         }
 
         @Override
-        public boolean isItemValid(ItemStack itemstack) {
-            return FurnaceTileEntity.isFuel(itemstack);
+        public boolean mayPlace(@Nonnull ItemStack itemstack) {
+            return FurnaceBlockEntity.isFuel(itemstack);
         }
     }
 }

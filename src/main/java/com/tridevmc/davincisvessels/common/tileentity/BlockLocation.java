@@ -1,13 +1,18 @@
 package com.tridevmc.davincisvessels.common.tileentity;
 
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 
 public class BlockLocation {
     private final BlockPos pos;
-    private final DimensionType dim;
+    private final ResourceKey<Level> dim;
 
-    public BlockLocation(BlockPos pos, DimensionType dim) {
+    /*
+     * dim is a ResourceKey<Level> toString
+     */
+
+    public BlockLocation(BlockPos pos, ResourceKey<Level> dim) {
         this.pos = pos;
         this.dim = dim;
     }
@@ -16,7 +21,7 @@ public class BlockLocation {
         return pos;
     }
 
-    public DimensionType getDim() {
+    public ResourceKey<Level> getDim() {
         return dim;
     }
 }

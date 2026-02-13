@@ -9,10 +9,10 @@ import com.tridevmc.davincisvessels.common.tileentity.TileCrate;
 import com.tridevmc.davincisvessels.common.tileentity.TileEntitySecuredBed;
 import com.tridevmc.movingworld.common.chunk.LocatedBlock;
 import com.tridevmc.movingworld.common.event.DisassembleBlockEvent;
-import net.minecraft.entity.Entity;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.player.PlayerSetSpawnEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -23,12 +23,12 @@ import java.util.Optional;
 public class CommonHookContainer {
     @SubscribeEvent
     public void onInteractWithEntity(PlayerInteractEvent.EntityInteract event) {
-        if (event.getEntityPlayer() != null) {
-            int x = MathHelper.floor(event.getTarget().posX);
-            int y = MathHelper.floor(event.getTarget().posY);
-            int z = MathHelper.floor(event.getTarget().posZ);
+        if (event.getEntity() != null) {
+            int x = Mth.floor(event.getTarget().getX());
+            int y = Mth.floor(event.getTarget().getY());
+            int z = Mth.floor(event.getTarget().getZ());
 
-            TileEntity te = event.getEntity().world.getTileEntity(new BlockPos(x, y, z));
+            BlockEntity te = event.getEntity().level().getBlockEntity(new BlockPos(x, y, z));
             if (te instanceof TileCrate && ((TileCrate) te).getContainedEntity() == event.getTarget()) {
                 ((TileCrate) te).releaseEntity();
                 event.setCanceled(true);
@@ -41,16 +41,16 @@ public class CommonHookContainer {
         if (e.isCanceled())
             return;
 
-        if (e.getEntityPlayer().getGameProfile() != null && e.getEntityPlayer().getGameProfile().getId() != null &&
-                ConnectionHandler.playerBedMap.containsKey(e.getEntityPlayer().getGameProfile().getId())) {
+        if (e.getEntity().getGameProfile() != null && e.getEntity().getGameProfile().getId() != null &&
+                ConnectionHandler.playerBedMap.containsKey(e.getEntity().getGameProfile().getId())) {
             //Spawn for the player is changing and they use a secured bed, clear the map of the player.
 
-            TileEntitySecuredBed bed = ConnectionHandler.playerBedMap.get(e.getEntityPlayer().getGameProfile().getId());
+            TileEntitySecuredBed bed = ConnectionHandler.playerBedMap.get(e.getEntity().getGameProfile().getId());
 
-            if (bed.getPos().equals(e.getNewSpawn()))
+            if (bed.getBlockPos().equals(e.getNewSpawn()))
                 return;
 
-            ConnectionHandler.playerBedMap.remove(e.getEntityPlayer().getGameProfile().getId());
+            ConnectionHandler.playerBedMap.remove(e.getEntity().getGameProfile().getId());
         }
     }
 
@@ -60,13 +60,13 @@ public class CommonHookContainer {
         if (event.movingWorld instanceof EntityVessel) {
             EntityVessel vessel = (EntityVessel) event.movingWorld;
             LocatedBlock lb = event.block;
-            if (lb.state.getBlock() == DavincisVesselsMod.CONTENT.blockHelm) {
+            if (lb.state.getBlock() == DavincisVesselsMod.CONTENT.blockHelm.get()) {
                 Entity passenger = vessel.controllingPassenger != null ? vessel.controllingPassenger : vessel.prevRiddenByEntity;
 
                 if (passenger != null) {
-                    BlockPos position = lb.pos.offset(lb.state.get(BlockHelm.FACING));
+                    BlockPos position = lb.pos.relative(lb.state.getValue(BlockHelm.FACING));
                     passenger.stopRiding();
-                    passenger.setPositionAndUpdate(position.getX() + 0.5D, position.getY() + 0.5D, position.getZ() + 0.5D);
+                    passenger.moveTo(position.getX() + 0.5D, position.getY() + 0.5D, position.getZ() + 0.5D);
                 }
             } else if (DavincisVesselsMod.BLOCK_CONFIG.isSeat(lb.state.getBlock())) {
                 Optional<EntitySeat> matchingSeatEntity = vessel.capabilities.getSeats().stream().filter(s -> s.getChunkPos().equals(lb.posNoOffset)).findFirst();
@@ -75,7 +75,7 @@ public class CommonHookContainer {
                     EntitySeat matchingSeat = matchingSeatEntity.get();
                     if (matchingSeat.getControllingPassenger() != null) {
                         matchingSeat.getControllingPassenger().stopRiding();
-                        matchingSeat.getControllingPassenger().setPosition(lb.pos.getX() + 0.5D, lb.pos.getY() + 0.5D, lb.pos.getZ() + 0.5D);
+                        matchingSeat.getControllingPassenger().moveTo(lb.pos.getX() + 0.5D, lb.pos.getY() + 0.5D, lb.pos.getZ() + 0.5D);
                     }
                 }
             }

@@ -2,9 +2,9 @@
     "ambientocclusion": false,
     "parent": "block/block",
     "textures": {
-        "seatpadding": "davincisvessels:blocks/seat",
+        "seatpadding": "davincisvessels:block/seat",
         "wood": "block/oak_planks",
-        "particle": "davincisvessels:blocks/seat"
+        "particle": "davincisvessels:block/seat"
     },
     "elements": [
         {

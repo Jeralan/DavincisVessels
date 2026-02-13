@@ -1,6 +1,6 @@
 package com.tridevmc.davincisvessels.common.api.block;
 
-import net.minecraft.tileentity.TileEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 public interface IBlockBalloon {
 
@@ -9,6 +9,6 @@ public interface IBlockBalloon {
      *
      * @param tileEntity null if not applicable.
      */
-    int getBalloonWorth(TileEntity tileEntity);
+    int getBalloonWorth(BlockEntity tileEntity);
 
 }

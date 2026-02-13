@@ -1,26 +1,39 @@
 package com.tridevmc.davincisvessels.client.render;
 
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.content.block.BlockHelm;
 import com.tridevmc.davincisvessels.common.entity.EntityVessel;
 import com.tridevmc.davincisvessels.common.tileentity.TileHelm;
 import com.tridevmc.movingworld.api.IMovingTile;
-import net.minecraft.block.BlockState;
+
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.client.model.data.ModelData;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.model.IBakedModel;
-import net.minecraft.client.renderer.texture.AtlasTexture;
-import net.minecraft.client.renderer.tileentity.TileEntityRenderer;
-import net.minecraft.util.Direction;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
 
 import java.io.IOException;
 
-public class TileEntityHelmRenderer extends TileEntityRenderer<TileHelm> {
+import javax.annotation.Nonnull;
+
+import org.joml.Quaternionf;
+
+public class TileEntityHelmRenderer implements BlockEntityRenderer<TileHelm> {
 
     @Override
-    public void render(TileHelm te, double x, double y, double z, float partialTicks, int destroyStage) {
+    public void render(@Nonnull TileHelm te, float partialTicks, @Nonnull PoseStack poseStack, @Nonnull MultiBufferSource bufferSource, int packedLight, int overlayTexture) {
         try {
-            renderHelm(te, x, y, z, partialTicks);
+            renderHelm(te, poseStack, bufferSource, partialTicks);
         } catch (Exception e) {
             if (e instanceof IOException)
                 e.printStackTrace();
@@ -29,20 +42,20 @@ public class TileEntityHelmRenderer extends TileEntityRenderer<TileHelm> {
         }
     }
 
-    private void renderHelm(TileHelm helm, double x, double y, double z, float partialTicks) throws Exception {
+    private void renderHelm(TileHelm helm, @Nonnull PoseStack poseStack, @Nonnull MultiBufferSource bufferSource, float partialTicks) throws Exception {
         EntityVessel vessel = null;
-        BlockState blockState = getWorld().getBlockState(helm.getPos());
+        BlockState blockState = helm.getLevel().getBlockState(helm.getBlockPos());
         Direction blockStateFacing = Direction.UP;
 
         if (blockState.getBlock() instanceof BlockHelm)
-            blockStateFacing = blockState.get(BlockHelm.FACING);
+            blockStateFacing = blockState.getValue(BlockHelm.FACING);
         if (((IMovingTile) helm).getParentMovingWorld() != null && ((IMovingTile) helm).getParentMovingWorld() instanceof EntityVessel) {
             vessel = (EntityVessel) ((IMovingTile) helm).getParentMovingWorld();
         }
 
         float vesselPitch = 0;
         if (vessel != null)
-            vesselPitch = vessel.prevRotationPitch + (vessel.rotationPitch - vessel.prevRotationPitch) * partialTicks;
+            vesselPitch = vessel.xRotO + (vessel.getXRot() - vessel.xRotO) * partialTicks;
 
         if (blockStateFacing == Direction.NORTH || blockStateFacing == Direction.WEST) {
             vesselPitch *= -1;
@@ -61,35 +74,38 @@ public class TileEntityHelmRenderer extends TileEntityRenderer<TileHelm> {
             translateZ = -.5F;
         }
 
-        GlStateManager.pushMatrix();
-        Minecraft.getInstance().getTextureManager().bindTexture(AtlasTexture.LOCATION_BLOCKS_TEXTURE);
-        GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-        GlStateManager.enableBlend();
-        GlStateManager.disableCull();
-        GlStateManager.enableRescaleNormal();
+        poseStack.pushPose();
+        VertexConsumer buffer = bufferSource.getBuffer(RenderType.cutoutMipped());
+        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        RenderSystem.enableBlend();
+        RenderSystem.disableCull();
+        // GlStateManager.enableRescaleNormal();
 
-        if (Minecraft.isAmbientOcclusionEnabled()) {
-            GlStateManager.shadeModel(7425);
-        } else {
-            GlStateManager.shadeModel(7424);
-        }
+        // if (Minecraft.isAmbientOcclusionEnabled()) {
+        //     GlStateManager.shadeModel(7425);
+        // } else {
+        //     GlStateManager.shadeModel(7424);
+        // }
 
-        GlStateManager.translated(x, y, z + 1);
+        poseStack.translate(0, 0, 1);
 
-        GlStateManager.translatef(translateX, translateY, translateZ);
-        GlStateManager.rotatef(vesselPitch * 10, onZAxis ? 0 : 1, 0, onZAxis ? 1 : 0);
-        GlStateManager.translatef(-translateX, -translateY, -translateZ);
+        poseStack.translate(translateX, translateY, translateZ);
+        poseStack.mulPose(new Quaternionf(vesselPitch * 10, onZAxis ? 0 : 1, 0, onZAxis ? 1 : 0));
+        poseStack.translate(-translateX, -translateY, -translateZ);
 
-        BlockState wheelState = blockState.with(BlockHelm.IS_WHEEL, true);
-        IBakedModel stateModel = Minecraft.getInstance().getBlockRendererDispatcher()
-                .getModelForState(wheelState);
-        Minecraft.getInstance().getBlockRendererDispatcher().getBlockModelRenderer()
-                .renderModelBrightness(stateModel, wheelState, 1, false);
+        BlockState wheelState = blockState.setValue(BlockHelm.IS_WHEEL, true);
+        BakedModel stateModel = Minecraft.getInstance().getBlockRenderer()
+                .getBlockModel(wheelState);
+        Minecraft.getInstance().getBlockRenderer().getModelRenderer()
+                .tesselateBlock(helm.getLevel(), stateModel, wheelState, 
+                helm.getBlockPos(), poseStack, buffer, false, 
+                RandomSource.create(), wheelState.getSeed(helm.getBlockPos()), 
+                OverlayTexture.NO_OVERLAY, ModelData.EMPTY, RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS));
 
-        GlStateManager.disableBlend();
-        GlStateManager.enableCull();
-        GlStateManager.disableRescaleNormal();
-        GlStateManager.popMatrix();
+        RenderSystem.disableBlend();
+        RenderSystem.enableCull();
+        // GlStateManager.disableRescaleNormal();
+        poseStack.popPose();
 
     }
 }

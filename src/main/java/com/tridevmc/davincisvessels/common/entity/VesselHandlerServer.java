@@ -2,8 +2,8 @@ package com.tridevmc.davincisvessels.common.entity;
 
 import com.tridevmc.movingworld.common.entity.EntityMovingWorld;
 import com.tridevmc.movingworld.common.entity.MovingWorldHandlerServer;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.Hand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionHand;
 
 public class VesselHandlerServer extends MovingWorldHandlerServer {
 
@@ -26,7 +26,7 @@ public class VesselHandlerServer extends MovingWorldHandlerServer {
     }
 
     @Override
-    public boolean processInitialInteract(PlayerEntity player, Hand hand) {
+    public boolean processInitialInteract(Player player, InteractionHand hand) {
         return movingWorld.getMovingWorldCapabilities().mountEntity(player);
     }
 
@@ -35,7 +35,7 @@ public class VesselHandlerServer extends MovingWorldHandlerServer {
         super.onChunkUpdate();
         if (firstChunkUpdate) {
             ((VesselCapabilities) movingWorld.getMovingWorldCapabilities()).spawnSeatEntities();
-            movingWorld.getDataManager().set(EntityVessel.CAN_SUBMERGE, ((VesselCapabilities) movingWorld.getMovingWorldCapabilities()).canSubmerge());
+            movingWorld.getEntityData().set(EntityVessel.CAN_SUBMERGE, ((VesselCapabilities) movingWorld.getMovingWorldCapabilities()).canSubmerge());
         }
     }
 }

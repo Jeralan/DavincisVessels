@@ -1,69 +1,71 @@
 package com.tridevmc.davincisvessels.client.render;
 
-import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.tridevmc.davincisvessels.common.entity.EntityParachute;
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.Tessellator;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+
+import net.minecraft.client.renderer.MultiBufferSource;
+import com.mojang.blaze3d.vertex.Tesselator;
 import net.minecraft.client.renderer.entity.EntityRenderer;
-import net.minecraft.client.renderer.entity.EntityRendererManager;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.resources.ResourceLocation;
+
+import javax.annotation.Nonnull;
 
 //TODO: possible rewrite?
-public class RenderParachute extends EntityRenderer {
+public class RenderParachute extends EntityRenderer<EntityParachute> {
     public static final ResourceLocation PARACHUTE_TEXTURE = new ResourceLocation("davincisvessels", "textures/entity/parachute.png");
 
     public ModelParachute model;
 
-    public RenderParachute(EntityRendererManager renderManager) {
-        super(renderManager);
+    public RenderParachute(EntityRendererProvider.Context context) {
+        super(context);
         model = new ModelParachute();
     }
 
-    public void renderParachute(EntityParachute parachute, double x, double y, double z, float yaw, float partialTicks) {
-        GlStateManager.pushMatrix();
-        GlStateManager.translatef((float) x, (float) y + (parachute != null && parachute.getControllingPassenger() != null ? parachute.getControllingPassenger().getHeight() * 2.5F : 4F), (float) z);
+    public void renderParachute(EntityParachute parachute, float yaw, float partialTicks, @Nonnull PoseStack poseStack, @Nonnull MultiBufferSource bufferSource, int packedLight) {
+        poseStack.pushPose();
+        poseStack.translate(0, (parachute != null && parachute.getControllingPassenger() != null ? parachute.getControllingPassenger().getBoundingBox().getYsize() * 2.5F : 4F), 0);
 
-        GlStateManager.pushMatrix();
-        GlStateManager.enableRescaleNormal();
-        GlStateManager.scalef(0.0625F, -0.0625F, -0.0625F);
-        bindEntityTexture(parachute);
-        model.render(parachute, 0F, 0F, 0F, 0F, 0F, 1F);
-        GlStateManager.disableRescaleNormal();
-        GlStateManager.popMatrix();
+        poseStack.pushPose();
+        poseStack.scale(0.0625F, -0.0625F, -0.0625F);
+        // bindEntityTexture(parachute);
+        model.renderToBuffer(poseStack, bufferSource.getBuffer(model.renderType(PARACHUTE_TEXTURE)), packedLight, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        poseStack.popPose();
 
-        GlStateManager.color4f(0F, 0F, 0F, 1F);
-        GL11.glLineWidth(4F);
-        Tessellator tess = Tessellator.getInstance();
-        BufferBuilder buffer = tess.getBuffer();
-        GlStateManager.color3f(0, 0, 0);
-        buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION);
-        buffer.pos(0D, -3D, 0D).endVertex();
-        buffer.pos(-1D, 0D, 1D).endVertex();
+        // GlStateManager.color4f(0F, 0F, 0F, 1F);
+        RenderSystem.lineWidth(4F);
+        Tesselator tess = Tesselator.getInstance();
+        BufferBuilder buffer = tess.getBuilder();
+        buffer.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION);
+        buffer.vertex(poseStack.last().pose(), 0F, -3F, 0F).color(0F, 0F, 0F, 1F).endVertex();
+        buffer.vertex(poseStack.last().pose(), -1F, 0F, 1F).color(0F, 0F, 0F, 1F).endVertex();
 
-        buffer.pos(0D, -3D, 0D).endVertex();
-        buffer.pos(-1D, 0D, -1D).endVertex();
+        buffer.vertex(poseStack.last().pose(), 0F, -3F, 0F).color(0F, 0F, 0F, 1F).endVertex();
+        buffer.vertex(poseStack.last().pose(), -1F, 0F, -1F).color(0F, 0F, 0F, 1F).endVertex();
 
-        buffer.pos(0D, -3D, 0D).endVertex();
-        buffer.pos(1D, 0D, 1D).endVertex();
+        buffer.vertex(poseStack.last().pose(), 0F, -3F, 0F).color(0F, 0F, 0F, 1F).endVertex();
+        buffer.vertex(poseStack.last().pose(), 1F, 0F, 1F).color(0F, 0F, 0F, 1F).endVertex();
 
-        buffer.pos(0D, -3D, 0D).endVertex();
-        buffer.pos(1D, 0D, -1D).endVertex();
-        tess.draw();
-        buffer.setTranslation(0F, 0F, 0F);
+        buffer.vertex(poseStack.last().pose(), 0F, -3F, 0F).color(0F, 0F, 0F, 1F).endVertex();
+        buffer.vertex(poseStack.last().pose(), 1F, 0F, -1F).color(0F, 0F, 0F, 1F).endVertex();
+        tess.end();
+        // buffer.setTranslation(0F, 0F, 0F);
 
-        GL11.glPopMatrix();
+        poseStack.popPose();
     }
 
     @Override
-    public void doRender(Entity entity, double d0, double d1, double d2, float f, float f1) {
-        renderParachute((EntityParachute) entity, d0, d1, d2, f, f1);
+    public void render(@Nonnull EntityParachute entity, float f, float f1, @Nonnull PoseStack poseStack, @Nonnull MultiBufferSource bufferSource, int packedLight) {
+        renderParachute(entity, f, f1, poseStack, bufferSource, packedLight);
     }
 
     @Override
-    protected ResourceLocation getEntityTexture(Entity entity) {
+    public ResourceLocation getTextureLocation(@Nonnull EntityParachute entity) {
         return PARACHUTE_TEXTURE;
     }
 

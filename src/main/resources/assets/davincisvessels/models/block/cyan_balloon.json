@@ -1,6 +1,6 @@
 {
     "parent": "block/cube_all",
     "textures": {
-        "all": "davincisvessels:blocks/cyan_balloon"
+        "all": "davincisvessels:block/cyan_balloon"
     }
 }

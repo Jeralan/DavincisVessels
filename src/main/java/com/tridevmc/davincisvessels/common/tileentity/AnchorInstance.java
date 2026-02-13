@@ -2,21 +2,22 @@ package com.tridevmc.davincisvessels.common.tileentity;
 
 import com.tridevmc.davincisvessels.common.LanguageEntries;
 import com.tridevmc.davincisvessels.common.util.NBTTagUtils;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.nbt.ListNBT;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.dimension.DimensionType;
+import com.tridevmc.movingworld.MovingWorldMod;
+
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.core.BlockPos;
 import net.minecraftforge.common.util.INBTSerializable;
 import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.common.thread.EffectiveSide;
+import net.minecraftforge.fml.util.thread.EffectiveSide;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-public class AnchorInstance implements INBTSerializable<CompoundNBT> {
+public class AnchorInstance implements INBTSerializable<CompoundTag> {
     /**
      * A unique identifier for this anchor, essentially a verification check for dimensions.
      */
@@ -111,20 +112,20 @@ public class AnchorInstance implements INBTSerializable<CompoundNBT> {
     }
 
     @Override
-    public CompoundNBT serializeNBT() {
-        CompoundNBT tag = new CompoundNBT();
+    public CompoundTag serializeNBT() {
+        CompoundTag tag = new CompoundTag();
 
         tag.putBoolean("INSTANCE", true);
         tag.putBoolean("type", type == InstanceType.VESSEL);
-        tag.putUniqueId("identifier", identifier);
+        tag.putUUID("identifier", identifier);
 
         if (!relatedAnchors.isEmpty()) {
-            ListNBT relatedAnchorsTagList = tag.getList("relatedAnchorsTagList", 10);
+            ListTag relatedAnchorsTagList = tag.getList("relatedAnchorsTagList", 10);
 
             for (HashMap.Entry<UUID, BlockLocation> e : relatedAnchors.entrySet()) {
-                CompoundNBT entry = new CompoundNBT();
-                entry.putUniqueId("identifier", e.getKey());
-                entry.putInt("dim", e.getValue().getDim().getId());
+                CompoundTag entry = new CompoundTag();
+                entry.putUUID("identifier", e.getKey());
+                entry.putString("dim", e.getValue().getDim().toString());
                 NBTTagUtils.writeVec3iToNBT(entry, "related", e.getValue().getPos());
                 relatedAnchorsTagList.add(entry);
             }
@@ -136,24 +137,24 @@ public class AnchorInstance implements INBTSerializable<CompoundNBT> {
     }
 
     @Override
-    public void deserializeNBT(CompoundNBT tag) {
+    public void deserializeNBT(CompoundTag tag) {
         if (!tag.contains("INSTANCE"))
             throw new IllegalArgumentException("NBT provided for deserialization is not valid for an anchor point! " + tag.toString());
 
         this.type = tag.getBoolean("type") ? InstanceType.VESSEL : InstanceType.LAND;
-        this.identifier = tag.getUniqueId("identifier");
+        this.identifier = tag.getUUID("identifier");
 
         if (tag.contains("relatedAnchorsTagList")) {
-            ListNBT relatedAnchorsTagList = tag.getList("relatedAnchorsTagList", 10);
+            ListTag relatedAnchorsTagList = tag.getList("relatedAnchorsTagList", 10);
             int size = relatedAnchorsTagList.size();
 
             for (int entry = 0; entry < size; entry++) {
-                CompoundNBT entryCompound = relatedAnchorsTagList.getCompound(entry);
-                int entryDimID = entryCompound.getInt("dim");
+                CompoundTag entryCompound = relatedAnchorsTagList.getCompound(entry);
+                String entryDimID = entryCompound.getString("dim");
                 BlockPos entryPos = new BlockPos(NBTTagUtils.readVec3iFromNBT(entryCompound, "related"));
-                UUID entryIdentifier = entryCompound.getUniqueId("identifier");
+                UUID entryIdentifier = entryCompound.getUUID("identifier");
 
-                relatedAnchors.put(entryIdentifier, new BlockLocation(entryPos, DimensionType.getById(entryDimID)));
+                relatedAnchors.put(entryIdentifier, new BlockLocation(entryPos, MovingWorldMod.PROXY.getWorld(entryDimID).dimension()));
             }
         }
     }
@@ -165,7 +166,7 @@ public class AnchorInstance implements INBTSerializable<CompoundNBT> {
         @Override
         public String toString() {
             if (EffectiveSide.get() == LogicalSide.CLIENT)
-                return this == VESSEL ? I18n.format(LanguageEntries.GUI_ANCHOR_MODE_VESSEL) : I18n.format(LanguageEntries.GUI_ANCHOR_MODE_WORLD);
+                return this == VESSEL ? I18n.get(LanguageEntries.GUI_ANCHOR_MODE_VESSEL) : I18n.get(LanguageEntries.GUI_ANCHOR_MODE_WORLD);
             else return super.toString();
         }
 

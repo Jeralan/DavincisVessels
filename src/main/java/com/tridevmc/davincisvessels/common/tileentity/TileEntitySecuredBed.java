@@ -2,25 +2,29 @@ package com.tridevmc.davincisvessels.common.tileentity;
 
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.handler.ConnectionHandler;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
 
 import java.util.UUID;
 
-public class TileEntitySecuredBed extends TileEntity {
+import javax.annotation.Nonnull;
+
+public class TileEntitySecuredBed extends BlockEntity {
 
     public boolean occupied;
     public boolean doMove;
     private UUID playerID;
 
-    public TileEntitySecuredBed() {
-        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileEntitySecuredBed.class));
+    public TileEntitySecuredBed(BlockPos pos, BlockState state) {
+        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileEntitySecuredBed.class).get(), pos, state);
     }
 
-    public void setPlayer(PlayerEntity player) {
-        if (!world.isRemote) {
+    public void setPlayer(Player player) {
+        if (level != null && !level.isClientSide) {
             if (player != null) {
                 this.playerID = player.getGameProfile().getId();
                 addToConnectionMap(playerID);
@@ -36,10 +40,10 @@ public class TileEntitySecuredBed extends TileEntity {
     }
 
     public void addToConnectionMap(UUID idForMap) {
-        if (!world.isRemote && idForMap != null) {
+        if (level != null && !level.isClientSide && idForMap != null) {
             if (ConnectionHandler.playerBedMap.containsKey(idForMap)) {
                 TileEntitySecuredBed prevBed = ConnectionHandler.playerBedMap.get(idForMap);
-                if (!prevBed.getPos().equals(getPos()) && !(prevBed.getWorld().getDimension().getType() == getWorld().getDimension().getType())) {
+                if (!prevBed.worldPosition.equals(worldPosition) && (prevBed.getLevel() == null || (prevBed.getLevel().dimensionType() != level.dimensionType()))) {
                     prevBed.setPlayer(null);
                     ConnectionHandler.playerBedMap.remove(idForMap);
                 }
@@ -50,41 +54,38 @@ public class TileEntitySecuredBed extends TileEntity {
     }
 
     public void moveBed(BlockPos newPos) {
-        if (world != null && world.isRemote)
+        if (level != null && level.isClientSide)
             return;
 
         if (playerID != null) {
             addToConnectionMap(playerID);
 
-            if (!doMove)
+            if (!doMove || level == null)
                 return;
 
-            PlayerEntity player = world.getPlayerByUuid(playerID);
+            Player player = level.getPlayerByUUID(playerID);
             if (player != null) {
-                player.setBedPosition(pos);
-                player.setSpawnPoint(newPos, true, world.getDimension().getType());
+                ((ServerPlayer) player).setRespawnPosition(level.dimension(), newPos, ((ServerPlayer) player).getRespawnAngle(), true, false);
                 doMove = false;
             }
         }
     }
 
     @Override
-    public CompoundNBT write(CompoundNBT tag) {
-        tag = super.write(tag);
+    public void saveAdditional(@Nonnull CompoundTag tag) {
+        super.saveAdditional(tag);
         if (playerID != null)
-            tag.putUniqueId("uuid", playerID);
+            tag.putUUID("uuid", playerID);
 
         tag.putBoolean("doMove", doMove);
-
-        return tag;
     }
 
     @Override
-    public void read(CompoundNBT tag) {
-        super.read(tag);
+    public void load(@Nonnull CompoundTag tag) {
+        super.load(tag);
 
         if (tag.contains("uuidMost") && tag.contains("uuidLeast"))
-            playerID = tag.getUniqueId("uuid");
+            playerID = tag.getUUID("uuid");
 
         doMove = tag.getBoolean("doMove");
 
@@ -94,9 +95,9 @@ public class TileEntitySecuredBed extends TileEntity {
     }
 
     @Override
-    public CompoundNBT getUpdateTag() {
-        CompoundNBT writtenTag = new CompoundNBT();
-        writtenTag = this.write(writtenTag);
+    public CompoundTag getUpdateTag() {
+        CompoundTag writtenTag = new CompoundTag();
+        this.saveAdditional(writtenTag);
         return writtenTag;
     }
 

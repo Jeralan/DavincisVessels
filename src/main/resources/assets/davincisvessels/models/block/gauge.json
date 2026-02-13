@@ -2,8 +2,8 @@
     "ambientocclusion": false,
     "parent": "block/block",
     "textures": {
-        "texture": "davincisvessels:blocks/gauge",
-        "particle": "davincisvessels:blocks/gauge"
+        "texture": "davincisvessels:block/gauge",
+        "particle": "davincisvessels:block/gauge"
     },
     "elements": [
         {

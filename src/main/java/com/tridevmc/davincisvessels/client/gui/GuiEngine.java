@@ -1,17 +1,19 @@
 package com.tridevmc.davincisvessels.client.gui;
 
 import com.tridevmc.davincisvessels.common.LanguageEntries;
-import net.minecraft.client.gui.screen.inventory.ContainerScreen;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.text.StringTextComponent;
-import org.lwjgl.opengl.GL11;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
 
-public class GuiEngine extends ContainerScreen {
+import javax.annotation.Nonnull;
+
+public class GuiEngine extends AbstractContainerScreen<ContainerEngine> {
     public static final ResourceLocation BACKGROUND_TEXTURE = new ResourceLocation("davincisvessels", "textures/gui/engine.png");
 
     public GuiEngine(ContainerEngine container) {
-        super(container, container.player.inventory, new StringTextComponent(""));
+        super(container, container.player.getInventory(), Component.literal(""));
     }
 
     @Override
@@ -20,24 +22,23 @@ public class GuiEngine extends ContainerScreen {
     }
 
     @Override
-    protected void drawGuiContainerForegroundLayer(int mousex, int mousey) {
+    protected void renderLabels(@Nonnull GuiGraphics guiGraphics, int mousex, int mousey) {
         int color = 0x404040;
         int row = 8;
         int col0 = 8;
 
-        font.drawString(I18n.format(LanguageEntries.GUI_ENGINE_TITLE), col0, row, color);
+        guiGraphics.drawString(font, I18n.get(LanguageEntries.GUI_ENGINE_TITLE), col0, row, color, false);
         row += 5;
 
-        font.drawString(I18n.format("container.inventory"), 8, ySize - 96 + 2, color);
+        guiGraphics.drawString(font, I18n.get("container.inventory"), 8, imageHeight - 96 + 2, color, false);
     }
 
     @Override
-    protected void drawGuiContainerBackgroundLayer(float var1, int var2, int var3) {
-        GL11.glColor4f(1F, 1F, 1F, 1F);
-        minecraft.textureManager.bindTexture(BACKGROUND_TEXTURE);
-        int x = (width - xSize) / 2;
-        int y = (height - ySize) / 2;
-        blit(x, y, 0, 0, xSize, ySize);
+    protected void renderBg(@Nonnull GuiGraphics guiGraphics, float var1, int var2, int var3) {
+        guiGraphics.setColor(1F, 1F, 1F, 1F);
+        int x = (width - imageWidth) / 2;
+        int y = (height - imageHeight) / 2;
+        guiGraphics.blit(BACKGROUND_TEXTURE, x, y, 0, 0, imageWidth, imageHeight);
     }
 
 }

@@ -1,22 +1,27 @@
 package com.tridevmc.davincisvessels.client.render;
 
+import javax.annotation.Nonnull;
+
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.tridevmc.davincisvessels.common.entity.EntitySeat;
+
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
-import net.minecraft.client.renderer.entity.EntityRendererManager;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.resources.ResourceLocation;
 
 public class RenderSeat extends EntityRenderer<EntitySeat> {
-    public RenderSeat(EntityRendererManager renderManager) {
-        super(renderManager);
+    public RenderSeat(EntityRendererProvider.Context context) {
+        super(context);
     }
 
     @Override
-    protected ResourceLocation getEntityTexture(EntitySeat entity) {
+    public ResourceLocation getTextureLocation(@Nonnull EntitySeat entity) {
         return new ResourceLocation("");
     }
 
     @Override
-    public void doRender(EntitySeat entity, double x, double y, double z, float entityYaw, float partialTicks) {
+    public void render(@Nonnull EntitySeat entity, float f, float f1, @Nonnull PoseStack poseStack, @Nonnull MultiBufferSource bufferSource, int packedLight) {
         //dont
     }
 

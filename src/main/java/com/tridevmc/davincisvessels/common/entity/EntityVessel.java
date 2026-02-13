@@ -19,48 +19,49 @@ import com.tridevmc.movingworld.common.entity.MovingWorldHandlerCommon;
 import com.tridevmc.movingworld.common.util.MathHelperMod;
 import com.tridevmc.movingworld.common.util.Vec3dMod;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.MobEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.container.Container;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.IPacket;
-import net.minecraft.network.datasync.DataParameter;
-import net.minecraft.network.datasync.DataSerializers;
-import net.minecraft.network.datasync.EntityDataManager;
-import net.minecraft.particles.ParticleTypes;
-import net.minecraft.potion.Effect;
-import net.minecraft.potion.EffectInstance;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RayTraceResult;
-import net.minecraft.util.text.StringTextComponent;
-import net.minecraft.world.World;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.common.thread.EffectiveSide;
-import net.minecraftforge.fml.network.NetworkHooks;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.IForgeRegistry;
+import net.minecraftforge.network.NetworkHooks;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 
 import java.util.Set;
 
+import javax.annotation.Nonnull;
+
 public class EntityVessel extends EntityMovingWorld implements IElementProvider<ContainerVessel> {
 
-    public static final DataParameter<Float> ENGINE_POWER = EntityDataManager.createKey(EntityVessel.class, DataSerializers.FLOAT);
-    public static final DataParameter<Boolean> CAN_MOVE = EntityDataManager.createKey(EntityVessel.class, DataSerializers.BOOLEAN);
-    public static final DataParameter<Boolean> CAN_SUBMERGE = EntityDataManager.createKey(EntityVessel.class, DataSerializers.BOOLEAN);
-    public static final DataParameter<Byte> IS_SUBMERGED = EntityDataManager.createKey(EntityVessel.class, DataSerializers.BYTE);
+    public static final EntityDataAccessor<Float> ENGINE_POWER = SynchedEntityData.defineId(EntityVessel.class, EntityDataSerializers.FLOAT);
+    public static final EntityDataAccessor<Boolean> CAN_MOVE = SynchedEntityData.defineId(EntityVessel.class, EntityDataSerializers.BOOLEAN);
+    public static final EntityDataAccessor<Boolean> CAN_SUBMERGE = SynchedEntityData.defineId(EntityVessel.class, EntityDataSerializers.BOOLEAN);
+    public static final EntityDataAccessor<Byte> IS_SUBMERGED = SynchedEntityData.defineId(EntityVessel.class, EntityDataSerializers.BYTE);
 
     public static final float BASE_FORWARD_SPEED = 0.005F, BASE_TURN_SPEED = 0.5F, BASE_LIFT_SPEED = 0.004F;
     public VesselCapabilities capabilities;
@@ -70,14 +71,14 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     private int driftCooldown = 0;
     private boolean submerge;
 
-    public EntityVessel(World world) {
-        super((EntityType<? extends EntityMovingWorld>) DavincisVesselsMod.CONTENT.entityTypes.get(EntityVessel.class), world);
+    public EntityVessel(Level world) {
+        super((EntityType<? extends EntityMovingWorld>) DavincisVesselsMod.CONTENT.entityTypes.get(EntityVessel.class).get(), world);
         capabilities = new VesselCapabilities(this, true);
     }
 
     @Override
     public EntityType<?> getType() {
-        return DavincisVesselsMod.CONTENT.entityTypes.get(EntityVessel.class);
+        return DavincisVesselsMod.CONTENT.entityTypes.get(EntityVessel.class).get();
     }
 
     @Override
@@ -89,8 +90,8 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     public void baseTick() {
         super.baseTick();
 
-        if (world != null) {
-            if (!world.isRemote) {
+        if (level() != null) {
+            if (!level().isClientSide) {
                 driftCooldown -= 1;
                 boolean hasEngines = false;
                 if (capabilities.getEngines() != null) {
@@ -101,31 +102,31 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
                     }
                 }
                 if (DavincisVesselsMod.CONFIG.enginesMandatory)
-                    getDataManager().set(CAN_MOVE, hasEngines);
+                    entityData.set(CAN_MOVE, hasEngines);
                 else
-                    getDataManager().set(CAN_MOVE, true);
+                    entityData.set(CAN_MOVE, true);
             }
-            if (world.isRemote) {
-                if (dataManager != null && !dataManager.isEmpty() && dataManager.isDirty()) {
-                    submerge = dataManager.get(IS_SUBMERGED) == new Byte((byte) 1);
+            if (level().isClientSide) {
+                if (entityData != null && !entityData.isEmpty() && entityData.isDirty()) {
+                    submerge = entityData.get(IS_SUBMERGED) == Byte.valueOf((byte) 1);
                 }
             }
         }
     }
 
     @Override
-    public ItemStack getPickedResult(RayTraceResult target) {
-        return new ItemStack(DavincisVesselsMod.CONTENT.blockHelm);
+    public ItemStack getPickResult() {
+        return new ItemStack(DavincisVesselsMod.CONTENT.blockHelm.get());
     }
 
     public boolean getSubmerge() {
-        return !getDataManager().isEmpty() ? (getDataManager().get(IS_SUBMERGED) == (byte) 1) : false;
+        return !entityData.isEmpty() ? (entityData.get(IS_SUBMERGED) == (byte) 1) : false;
     }
 
     public void setSubmerge(boolean submerge) {
         this.submerge = submerge;
-        if (world != null && !world.isRemote) {
-            getDataManager().set(IS_SUBMERGED, submerge ? new Byte((byte) 1) : new Byte((byte) 0));
+        if (level() != null && !level().isClientSide) {
+            entityData.set(IS_SUBMERGED, submerge ? Byte.valueOf((byte) 1) : Byte.valueOf((byte) 0));
             if (getMobileChunk().marker != null && getMobileChunk().marker.tile instanceof TileHelm) {
                 TileHelm helm = (TileHelm) getMobileChunk().marker.tile;
 
@@ -135,23 +136,14 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     }
 
     @Override
-    public AxisAlignedBB getCollisionBox(Entity entity) {
-        if (entity != null) {
-            if (entity instanceof EntityMovingWorld) {
-                EntityMovingWorld entityMovingWorld = (EntityMovingWorld) entity;
-                return entityMovingWorld.getBoundingBox();
-            }
-            if (entity instanceof EntitySeat || entity.getRidingEntity() instanceof EntitySeat
-                    || entity instanceof MobEntity)
-                return new AxisAlignedBB(0, 0, 0, 0, 0, 0);
-        }
-        return new AxisAlignedBB(0, 0, 0, 0, 0, 0);
+    public boolean canCollideWith(@Nonnull Entity entity) {
+        return entity instanceof EntityMovingWorld;
     }
 
     @Override
     public MovingWorldHandlerCommon getHandler() {
         if (handler == null) {
-            if (EffectiveSide.get() == LogicalSide.CLIENT) {
+            if (level().isClientSide) {
                 handler = new VesselHandlerClient(this);
                 handler.setMovingWorld(this);
             } else {
@@ -164,10 +156,10 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
 
     @Override
     public void initMovingWorld() {
-        dataManager.register(ENGINE_POWER, 0F);
-        dataManager.register(CAN_MOVE, false);
-        dataManager.register(CAN_SUBMERGE, false);
-        dataManager.register(IS_SUBMERGED, (byte) 0);
+        entityData.define(ENGINE_POWER, 0F);
+        entityData.define(CAN_MOVE, false);
+        entityData.define(CAN_SUBMERGE, false);
+        entityData.define(IS_SUBMERGED, (byte) 0);
     }
 
     @Override
@@ -206,7 +198,7 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
             BlockPos worldAnchor = closestRelation.getRight().pos;
             super.alignToGrid(true);
 
-            float yaw = Math.round(rotationYaw / 90F) * 90F;
+            float yaw = Math.round(getYRot() / 90F) * 90F;
             yaw = (float) Math.toRadians(yaw);
             float ox = -getMobileChunk().getCenterX();
             float oz = -getMobileChunk().getCenterZ();
@@ -215,11 +207,11 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
             vec = vec.rotateAroundY(yaw);
 
             BlockPos pos = new BlockPos(MathHelperMod.round_double(vec.x), 0, MathHelperMod.round_double(vec.z));
-            setPositionAndUpdate(
+            moveTo(
                     worldAnchor.getX() + -pos.getX(), worldAnchor.getY() + 2, worldAnchor.getZ() + -pos.getZ());
 
             super.alignToGrid(false);
-            updatePassenger(getControllingPassenger());
+            positionRider(getControllingPassenger());
 
             return true;
         }
@@ -243,12 +235,12 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     }
 
     @Override
-    public void writeMovingWorldNBT(CompoundNBT tag) {
+    public void writeMovingWorldNBT(CompoundTag tag) {
         tag.putBoolean("submerge", submerge);
     }
 
     @Override
-    public void readMovingWorldNBT(CompoundNBT tag) {
+    public void readMovingWorldNBT(CompoundTag tag) {
         setSubmerge(tag.getBoolean("submerge"));
     }
 
@@ -267,12 +259,12 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
                     updatePassengerPosition(prevRiddenByEntity, riderDestination, 1);
                     disassemble(false);
                 } else {
-                    if (!world.isRemote && isFlying()) {
+                    if (!level().isClientSide && isFlying()) {
                         driftCooldown = 20 * 6;
-                        EntityParachute parachute = new EntityParachute(world, this, riderDestination);
-                        if (world.addEntity(parachute)) {
+                        EntityParachute parachute = new EntityParachute(level(), this, riderDestination);
+                        if (((ServerLevel) level()).addFreshEntity(parachute)) {
                             prevRiddenByEntity.startRiding(parachute);
-                            prevRiddenByEntity.setSneaking(false);
+                            prevRiddenByEntity.setPose(Pose.STANDING);
                         }
                     }
                 }
@@ -282,7 +274,7 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
 
         if (getControllingPassenger() == null || !capabilities.canMove()) {
             if (isFlying()) {
-                this.setMotion(this.getMotion().subtract(0, BASE_LIFT_SPEED * 0.2F, 0));
+                this.setDeltaMovement(this.getDeltaMovement().subtract(0, BASE_LIFT_SPEED * 0.2F, 0));
             }
         } else {
             handlePlayerControl();
@@ -294,19 +286,16 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     public void updatePassengerPosition(Entity passenger, BlockPos riderDestination, int flags) {
         super.updatePassengerPosition(passenger, riderDestination, flags);
 
-        if (submerge && passenger instanceof LivingEntity && world != null && !world.isRemote) {
+        if (submerge && passenger instanceof LivingEntity && level() != null && !level().isClientSide) {
             //Apply water breathing so we don't die and apply night vision so we're not blind.
 
             LivingEntity livingPassenger = (LivingEntity) passenger;
-            IForgeRegistry<Effect> potions = ForgeRegistries.POTIONS;
-            Effect waterBreathing = potions.getValue(new ResourceLocation("water_breathing"));
-            if (livingPassenger.getActivePotionEffect(waterBreathing) == null ||
-                    livingPassenger.getActivePotionEffect(waterBreathing).getDuration() <= 20 * 11)
-                livingPassenger.addPotionEffect(new EffectInstance(waterBreathing, 20 * 12, 1));
-            Effect nightVision = potions.getValue(new ResourceLocation("night_vision"));
-            if (livingPassenger.getActivePotionEffect(nightVision) == null ||
-                    livingPassenger.getActivePotionEffect(nightVision).getDuration() <= 20 * 11)
-                livingPassenger.addPotionEffect(new EffectInstance(nightVision, 20 * 12, 1));
+            if (livingPassenger.getEffect(MobEffects.WATER_BREATHING) == null ||
+                    livingPassenger.getEffect(MobEffects.WATER_BREATHING).getDuration() <= 20 * 11)
+                livingPassenger.addEffect(new MobEffectInstance(MobEffects.WATER_BREATHING, 20 * 12, 1));
+            if (livingPassenger.getEffect(MobEffects.NIGHT_VISION) == null ||
+                    livingPassenger.getEffect(MobEffects.NIGHT_VISION).getDuration() <= 20 * 11)
+                livingPassenger.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 20 * 12, 1));
         }
     }
 
@@ -329,15 +318,15 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     public void spawnParticles(double horvel) {
         if (capabilities.getEngines() != null && !capabilities.getEngines().isEmpty()) {
             Vec3dMod vec = Vec3dMod.getOrigin();
-            float yaw = (float) Math.toRadians(rotationYaw);
+            float yaw = (float) Math.toRadians(getYRot());
             for (ITileEngineModifier engine : capabilities.getEngines()) {
                 if (engine.getPowerIncrement(capabilities) != 0F) {
-                    vec = vec.setX(((TileEntity) engine).getPos().getX() - getMobileChunk().getCenterX() + 0.5f);
-                    vec = vec.setY(((TileEntity) engine).getPos().getY());
-                    vec = vec.setZ(((TileEntity) engine).getPos().getZ() - getMobileChunk().getCenterZ() + 0.5f);
+                    vec = vec.setX(((BlockEntity) engine).getBlockPos().getX() - getMobileChunk().getCenterX() + 0.5f);
+                    vec = vec.setY(((BlockEntity) engine).getBlockPos().getY());
+                    vec = vec.setZ(((BlockEntity) engine).getBlockPos().getZ() - getMobileChunk().getCenterZ() + 0.5f);
                     vec = vec.rotateAroundY(yaw);
-                    world.addParticle(ParticleTypes.LARGE_SMOKE,
-                            posX + vec.x, posY + vec.y + 1d, posZ + vec.z, 0d, 0d, 0d);
+                    level().addParticle(ParticleTypes.LARGE_SMOKE,
+                            getX() + vec.x, getY() + vec.y + 1d, getZ() + vec.z, 0d, 0d, 0d);
                 }
             }
         }
@@ -346,16 +335,16 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     public int getBelowWater() {
         byte b0 = 5;
         int blocksPerMeter = (int) (b0 * (getBoundingBox().maxY - getBoundingBox().minY));
-        AxisAlignedBB axisalignedbb = new AxisAlignedBB(0D, 0D, 0D, 0D, 0D, 0D);
+        AABB axisalignedbb = new AABB(0D, 0D, 0D, 0D, 0D, 0D);
         int belowWater = 0;
         for (; belowWater < blocksPerMeter; belowWater++) {
             double d1 = getBoundingBox().minY
                     + (getBoundingBox().maxY - getBoundingBox().minY) * belowWater / blocksPerMeter;
             double d2 = getBoundingBox().minY
                     + (getBoundingBox().maxY - getBoundingBox().minY) * (belowWater + 1) / blocksPerMeter;
-            axisalignedbb = new AxisAlignedBB(getBoundingBox().minX, d1, getBoundingBox().minZ, getBoundingBox().maxX, d2, getBoundingBox().maxZ);
+            axisalignedbb = new AABB(getBoundingBox().minX, d1, getBoundingBox().minZ, getBoundingBox().maxX, d2, getBoundingBox().maxZ);
 
-            if (!isAABBInLiquidNotFall(world, axisalignedbb)) {
+            if (!isAABBInLiquidNotFall(level(), axisalignedbb)) {
                 break;
             }
         }
@@ -370,16 +359,16 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
         byte b0 = 5;
         int blocksPerMeter = (int) (b0 * (getBoundingBox().maxY - getBoundingBox().minY));
         float waterVolume = 0F;
-        AxisAlignedBB axisalignedbb = new AxisAlignedBB(0D, 0D, 0D, 0D, 0D, 0D);
+        AABB axisalignedbb = new AABB(0D, 0D, 0D, 0D, 0D, 0D);
         int belowWater = 0;
         for (; belowWater < blocksPerMeter; belowWater++) {
             double d1 = getBoundingBox().minY
                     + (getBoundingBox().maxY - getBoundingBox().minY) * belowWater / blocksPerMeter;
             double d2 = getBoundingBox().minY
                     + (getBoundingBox().maxY - getBoundingBox().minY) * (belowWater + 1) / blocksPerMeter;
-            axisalignedbb = new AxisAlignedBB(getBoundingBox().minX, d1, getBoundingBox().minZ, getBoundingBox().maxX, d2, getBoundingBox().maxZ);
+            axisalignedbb = new AABB(getBoundingBox().minX, d1, getBoundingBox().minZ, getBoundingBox().maxX, d2, getBoundingBox().maxZ);
 
-            if (!isAABBInLiquidNotFall(world, axisalignedbb)) {
+            if (!isAABBInLiquidNotFall(level(), axisalignedbb)) {
                 break;
             }
         }
@@ -394,7 +383,7 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
             }
         }
 
-        if (onGround) {
+        if (onGround()) {
             setFlying(false);
         }
 
@@ -403,15 +392,15 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
             setFlying(false);
             float buoyancyforce = 1F * waterVolume * gravity; //F = rho * V * g (Archimedes' principle)
             float mass = getMovingWorldCapabilities().getMass();
-            setMotion(getMotion().add(0, buoyancyforce / mass, 0));
+            setDeltaMovement(getDeltaMovement().add(0, buoyancyforce / mass, 0));
         }
 
         if (DavincisVesselsMod.CONFIG.enableVesselDownfall) {
             if (!isFlying() || (submergeMode && belowWater <= (getMobileChunk().maxY() * 5 / 3 * 2)))
-                setMotion(getMotion().subtract(0, gravity, 0));
+                setDeltaMovement(getDeltaMovement().subtract(0, gravity, 0));
         } else {
             if (!capabilities.canFly() && !capabilities.canSubmerge())
-                setMotion(getMotion().subtract(0, gravity, 0));
+                setDeltaMovement(getDeltaMovement().subtract(0, gravity, 0));
         }
 
         super.handleServerUpdate(horizontalVelocity);
@@ -420,15 +409,15 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     @Override
     public void handleServerUpdatePreRotation() {
         if (DavincisVesselsMod.CONFIG.vesselControlType == EnumVesselControlType.VANILLA) {
-            double newYaw = rotationYaw;
-            double dx = prevPosX - posX;
-            double dz = prevPosZ - posZ;
+            double newYaw = getYRot();
+            double dx = xOld - getX();
+            double dz = zOld - getZ();
 
             if (getControllingPassenger() != null && !isBraking() && dx * dx + dz * dz > 0.01D) {
-                newYaw = 270F - Math.toDegrees(Math.atan2(dz, dx)) + frontDirection.getHorizontalIndex() * 90F;
+                newYaw = 270F - Math.toDegrees(Math.atan2(dz, dx)) + frontDirection.get2DDataValue() * 90F;
             }
 
-            double deltayaw = MathHelper.wrapDegrees(newYaw - rotationYaw);
+            double deltayaw = Mth.wrapDegrees(newYaw - getYRot());
             double maxyawspeed = 2D;
             if (deltayaw > maxyawspeed) {
                 deltayaw = maxyawspeed;
@@ -437,31 +426,31 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
                 deltayaw = -maxyawspeed;
             }
 
-            rotationYaw = (float) (rotationYaw + deltayaw);
+            setYRot((float) (getYRot() + deltayaw));
         }
     }
 
     @Override
     public boolean disassemble(boolean overwrite) {
-        if (world.isRemote)
+        if (level().isClientSide)
             return true;
 
-        updatePassenger(getControllingPassenger());
+        positionRider(getControllingPassenger());
 
         ChunkDisassembler disassembler = getDisassembler();
         disassembler.overwrite = overwrite;
 
         if (!disassembler.canDisassemble(getNewAssemblyInteractor())) {
-            if (prevRiddenByEntity instanceof PlayerEntity) {
-                StringTextComponent testMessage = new StringTextComponent("Cannot disassemble vessel here");
-                ((PlayerEntity) prevRiddenByEntity).sendStatusMessage(testMessage, true);
+            if (prevRiddenByEntity instanceof Player) {
+                MutableComponent testMessage = Component.literal("Cannot disassemble vessel here");
+                ((Player) prevRiddenByEntity).displayClientMessage(testMessage, true);
             }
             return false;
         }
 
         AssembleResult result = disassembler.doDisassemble(getNewAssemblyInteractor());
         if (result.getMovingWorldMarker() != null) {
-            TileEntity te = result.getMovingWorldMarker().tile;
+            BlockEntity te = result.getMovingWorldMarker().tile;
             if (te instanceof TileHelm) {
                 ((TileHelm) te).setAssembleResult(result);
                 ((TileHelm) te).setInfo(getInfo());
@@ -473,34 +462,34 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
 
     private void handlePlayerControl() {
         if (getControllingPassenger() instanceof LivingEntity && ((VesselCapabilities) getMovingWorldCapabilities()).canMove()) {
-            double throttle = ((LivingEntity) getControllingPassenger()).moveForward;
+            double throttle = ((LivingEntity) getControllingPassenger()).zza;
             if (isFlying()) {
                 throttle *= 0.5D;
             }
 
             if (DavincisVesselsMod.CONFIG.vesselControlType == EnumVesselControlType.DAVINCIS) {
-                Vec3dMod vec = new Vec3dMod(getControllingPassenger().getMotion().x, 0D, getControllingPassenger().getMotion().z);
-                vec.rotateAroundY((float) Math.toRadians(getControllingPassenger().rotationYaw));
+                Vec3dMod vec = new Vec3dMod(getControllingPassenger().getDeltaMovement().x, 0D, getControllingPassenger().getDeltaMovement().z);
+                vec.rotateAroundY((float) Math.toRadians(getControllingPassenger().getYRot()));
 
-                double steer = ((LivingEntity) getControllingPassenger()).moveStrafing;
+                double steer = ((LivingEntity) getControllingPassenger()).xxa;
                 motionYaw += steer * BASE_TURN_SPEED * capabilities.getRotationMult()
                         * DavincisVesselsMod.CONFIG.turnSpeed;
 
-                float yaw = (float) Math.toRadians(180F - rotationYaw + frontDirection.getHorizontalIndex() * 90F);
-                vec = vec.setX(getMotion().x);
-                vec = vec.setZ(getMotion().z);
+                float yaw = (float) Math.toRadians(180F - getYRot() + frontDirection.get2DDataValue() * 90F);
+                vec = vec.setX(getDeltaMovement().x);
+                vec = vec.setZ(getDeltaMovement().z);
                 vec = vec.rotateAroundY(yaw);
                 vec = vec.setX(vec.x * 0.9D);
                 vec = vec.setZ(vec.z - throttle * BASE_FORWARD_SPEED * capabilities.getSpeedMult());
                 vec = vec.rotateAroundY(-yaw);
-                vec = vec.setY(getMotion().y);
-                this.setMotion(vec);
+                vec = vec.setY(getDeltaMovement().y);
+                this.setDeltaMovement(vec);
             } else if (DavincisVesselsMod.CONFIG.vesselControlType == EnumVesselControlType.VANILLA) {
                 if (throttle > 0.0D) {
-                    double dsin = -Math.sin(Math.toRadians(getControllingPassenger().rotationYaw));
-                    double dcos = Math.cos(Math.toRadians(getControllingPassenger().rotationYaw));
+                    double dsin = -Math.sin(Math.toRadians(getControllingPassenger().getYRot()));
+                    double dcos = Math.cos(Math.toRadians(getControllingPassenger().getYRot()));
 
-                    this.setMotion(this.getMotion().add(dsin * BASE_FORWARD_SPEED * capabilities.speedMultiplier, 0,
+                    this.setDeltaMovement(this.getDeltaMovement().add(dsin * BASE_FORWARD_SPEED * capabilities.speedMultiplier, 0,
                             dcos * BASE_FORWARD_SPEED * capabilities.speedMultiplier));
                 }
             }
@@ -511,7 +500,7 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
                 alignToGrid(true);
             } else if (isBraking()) {
                 float yMult = isFlying() ? capabilities.brakeMult : 1;
-                this.setMotion(this.getMotion().mul(capabilities.brakeMult, yMult, capabilities.brakeMult));
+                this.setDeltaMovement(this.getDeltaMovement().multiply(capabilities.brakeMult, yMult, capabilities.brakeMult));
             } else if (controller.getVesselControl() < 3 && capabilities.canFly()) {
                 int i;
                 if (controller.getVesselControl() == 2) {
@@ -520,7 +509,7 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
                 } else {
                     i = -1;
                 }
-                this.setMotion(this.getMotion().add(0, i * BASE_LIFT_SPEED * capabilities.getLiftMult(), 0));
+                this.setDeltaMovement(this.getDeltaMovement().add(0, i * BASE_LIFT_SPEED * capabilities.getLiftMult(), 0));
                 // TODO: Achievements are gone.
                 //if (getControllingPassenger() != null && getControllingPassenger() instanceof EntityPlayer
                 //        && !((EntityPlayer) getControllingPassenger()).hasAchievement(DavincisVesselsContent.achievementFlyVessel))
@@ -530,8 +519,8 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     }
 
     @Override
-    public boolean canBePushed() {
-        return !removed && getControllingPassenger() == null && driftCooldown <= 0;
+    public boolean isPushable() {
+        return !isRemoved() && getControllingPassenger() == null && driftCooldown <= 0;
     }
 
     @Override
@@ -588,22 +577,22 @@ public class EntityVessel extends EntityMovingWorld implements IElementProvider<
     }
 
     public boolean canSubmerge() {
-        return !dataManager.isEmpty() ? dataManager.get(CAN_SUBMERGE) : false;
+        return !entityData.isEmpty() ? entityData.get(CAN_SUBMERGE) : false;
     }
 
     @OnlyIn(Dist.CLIENT)
     @Override
-    public Screen createScreen(ContainerVessel container, PlayerEntity player) {
+    public AbstractContainerScreen<ContainerVessel> createScreen(ContainerVessel container, Player player) {
         return new GuiVessel(container);
     }
 
     @Override
-    public Container createMenu(int window, PlayerInventory playerInventory, PlayerEntity playerIn) {
+    public AbstractContainerMenu createMenu(int window, @Nonnull Inventory playerInventory, @Nonnull Player playerIn) {
         return new ContainerVessel(window, this, playerIn);
     }
 
     @Override
-    public IPacket<?> createSpawnPacket() {
+    public Packet<ClientGamePacketListener> getAddEntityPacket() {
         return NetworkHooks.getEntitySpawningPacket(this);
     }
 }

@@ -1,31 +1,33 @@
 package com.tridevmc.davincisvessels.client.gui;
 
+import javax.annotation.Nonnull;
+
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.tileentity.TileHelm;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.container.Container;
-import net.minecraft.inventory.container.Slot;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
-public class ContainerHelm extends Container {
+public class ContainerHelm extends AbstractContainerMenu {
     public final TileHelm helm;
-    public final PlayerEntity player;
+    public final Player player;
 
-    public ContainerHelm(int window, TileHelm helm, PlayerEntity player) {
+    public ContainerHelm(int window, TileHelm helm, Player player) {
         super(DavincisVesselsMod.CONTENT.universalContainerType, window);
         this.helm = helm;
         this.player = player;
 
-        bindPlayerInventory(player.inventory);
+        bindPlayerInventory(player.getInventory());
     }
 
     @Override
-    public boolean canInteractWith(PlayerEntity player) {
-        return player.world.getTileEntity(helm.getPos()) == helm && helm.getPos().distanceSq(player.getPosition()) < 25D;
+    public boolean stillValid(@Nonnull Player player) {
+        return player.level().getBlockEntity(helm.getBlockPos()) == helm && helm.getBlockPos().distSqr(player.blockPosition()) < 25D;
     }
 
-    protected void bindPlayerInventory(PlayerInventory inventoryPlayer) {
+    protected void bindPlayerInventory(Inventory inventoryPlayer) {
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 9; j++) {
                 int xOff = 40;
@@ -42,30 +44,30 @@ public class ContainerHelm extends Container {
     }
 
     @Override
-    public ItemStack transferStackInSlot(PlayerEntity player, int slot) {
+    public ItemStack quickMoveStack(@Nonnull Player player, int slot) {
         ItemStack stack = ItemStack.EMPTY;
-        Slot slotObject = inventorySlots.get(slot);
+        Slot slotObject = slots.get(slot);
 
         //null checks and checks if the item can be stacked (maxStackSize > 1)
-        if (slotObject != null && slotObject.getHasStack()) {
-            ItemStack stackInSlot = slotObject.getStack();
+        if (slotObject != null && slotObject.hasItem()) {
+            ItemStack stackInSlot = slotObject.getItem();
             stack = stackInSlot.copy();
 
             //merges the item into player inventory since its in the tile
             if (slot < 9) {
-                if (!this.mergeItemStack(stackInSlot, 0, 35, true)) {
+                if (!this.moveItemStackTo(stackInSlot, 0, 35, true)) {
                     return ItemStack.EMPTY;
                 }
             }
             //places it into the tile is possible since its in the player inventory
-            else if (!this.mergeItemStack(stackInSlot, 0, 9, false)) {
+            else if (!this.moveItemStackTo(stackInSlot, 0, 9, false)) {
                 return ItemStack.EMPTY;
             }
 
             if (stackInSlot.getCount() == 0) {
-                slotObject.putStack(ItemStack.EMPTY);
+                slotObject.set(ItemStack.EMPTY);
             } else {
-                slotObject.onSlotChanged();
+                slotObject.setChanged();
             }
 
             if (stackInSlot.getCount() == stack.getCount()) {

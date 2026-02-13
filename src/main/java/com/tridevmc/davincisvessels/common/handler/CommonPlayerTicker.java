@@ -2,14 +2,15 @@ package com.tridevmc.davincisvessels.common.handler;
 
 import com.tridevmc.davincisvessels.common.entity.EntityParachute;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraft.world.entity.Pose;
+import net.minecraftforge.event.TickEvent;
 
 public class CommonPlayerTicker {
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent e) {
-        if (e.phase == TickEvent.Phase.END && e.player.getRidingEntity() instanceof EntityParachute && e.player.getRidingEntity().ticksExisted < 40) {
-            if (e.player.isSneaking()) {
-                e.player.setSneaking(false);
+        if (e.phase == TickEvent.Phase.END && e.player.getVehicle() instanceof EntityParachute && e.player.getVehicle().tickCount < 40) {
+            if (e.player.isCrouching()) {
+                e.player.setPose(Pose.STANDING);
             }
         }
     }

@@ -1,6 +1,6 @@
 {
     "parent": "item/generated",
     "textures": {
-        "layer0": "davincisvessels:items/secured_bed"
+        "layer0": "davincisvessels:item/secured_bed"
     }
 }

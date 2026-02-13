@@ -1,12 +1,12 @@
 package com.tridevmc.davincisvessels.common.command;
 
 import com.mojang.brigadier.CommandDispatcher;
-import net.minecraft.command.CommandSource;
-import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraftforge.event.server.ServerStartingEvent;
 
 public class DavincisCommands {
-    public static void register(FMLServerStartingEvent e) {
-        CommandDispatcher<CommandSource> dispatcher = e.getCommandDispatcher();
+    public static void register(ServerStartingEvent e) {
+        CommandDispatcher<CommandSourceStack> dispatcher = e.getServer().getCommands().getDispatcher();
         CommandDisassembleNear.register(dispatcher);
         CommandDisassembleVessel.register(dispatcher);
         CommandDVTP.register(dispatcher);

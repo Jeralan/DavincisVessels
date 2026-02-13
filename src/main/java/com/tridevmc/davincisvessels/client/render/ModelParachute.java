@@ -5,71 +5,89 @@
 // - ZeuX
 package com.tridevmc.davincisvessels.client.render;
 
+import javax.annotation.Nonnull;
+
+import com.google.common.collect.ImmutableList;
 
 import com.tridevmc.davincisvessels.common.entity.EntityParachute;
-import net.minecraft.client.renderer.entity.model.EntityModel;
-import net.minecraft.client.renderer.entity.model.RendererModel;
 
-public class ModelParachute extends EntityModel<EntityParachute> {
+import net.minecraft.client.model.ListModel;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.geom.PartPose;
+import net.minecraft.client.model.geom.builders.CubeListBuilder;
+import net.minecraft.client.model.geom.builders.MeshDefinition;
+
+public class ModelParachute extends ListModel<EntityParachute> {
     //fields
-    RendererModel side0;
-    RendererModel side1;
-    RendererModel roof;
-    RendererModel side2;
-    RendererModel side3;
+    ModelPart side0;
+    ModelPart side1;
+    ModelPart roof;
+    ModelPart side2;
+    ModelPart side3;
+    int textureWidth;
+    int textureHeight;
 
     public ModelParachute() {
         textureWidth = 128;
         textureHeight = 64;
 
-        side0 = new RendererModel(this, 0, 0);
-        side0.addBox(-16F, -16F, 0F, 32, 32, 1);
-        side0.setRotationPoint(0F, 0F, 16F);
-        side0.setTextureSize(128, 64);
-        side0.mirror = true;
-        setRotation(side0, 0F, 0F, 0F);
-        side1 = new RendererModel(this, 0, 0);
-        side1.addBox(-16F, -15F, 0F, 32, 31, 1);
-        side1.setRotationPoint(0F, 0F, -16F);
-        side1.setTextureSize(128, 64);
-        side1.mirror = true;
-        setRotation(side1, 0F, 0F, 0F);
-        roof = new RendererModel(this, 0, 0);
-        roof.addBox(-16F, 0F, -16F, 32, 1, 32);
-        roof.setRotationPoint(0F, -16F, 0F);
-        roof.setTextureSize(128, 64);
-        roof.mirror = true;
-        setRotation(roof, 0F, 0F, 0F);
-        side2 = new RendererModel(this, 0, 0);
-        side2.addBox(0F, -16F, -16F, 1, 32, 33);
-        side2.setRotationPoint(16F, 0F, 0F);
-        side2.setTextureSize(128, 64);
-        side2.mirror = true;
-        setRotation(side2, 0F, 0F, 0F);
-        side3 = new RendererModel(this, 0, 0);
-        side3.addBox(0F, -15F, -15F, 1, 31, 31);
-        side3.setRotationPoint(-16F, 0F, 0F);
-        side3.setTextureSize(128, 64);
-        side3.mirror = true;
-        setRotation(side3, 0F, 0F, 0F);
+        MeshDefinition side0definition = new MeshDefinition();
+        side0definition.getRoot().addOrReplaceChild("side0",
+            CubeListBuilder.create()
+                .texOffs(0, 0)
+                .addBox(-16.0F, -16.0F, 0.0F, 32, 32, 1)
+                .mirror(true),
+            PartPose.offsetAndRotation(0.0F, 0.0F, 16.0F, 0F, 0F, 0F)
+        );
+        side0 = side0definition.getRoot().bake(textureWidth, textureHeight);
+
+        MeshDefinition side1definition = new MeshDefinition();
+        side1definition.getRoot().addOrReplaceChild("side1",
+            CubeListBuilder.create()
+                .texOffs(0, 0)
+                .addBox(-16F, -15F, 0F, 32, 31, 1)
+                .mirror(true),
+            PartPose.offsetAndRotation(0.0F, 0.0F, -16.0F, 0F, 0F, 0F)
+        );
+        side1 = side1definition.getRoot().bake(textureWidth, textureHeight);
+
+        MeshDefinition roofdefinition = new MeshDefinition();
+        roofdefinition.getRoot().addOrReplaceChild("roof",
+            CubeListBuilder.create()
+                .texOffs(0, 0)
+                .addBox(-16F, 0F, -16F, 32, 1, 32)
+                .mirror(true),
+            PartPose.offsetAndRotation(0.0F, -16.0F, 0.0F, 0F, 0F, 0F)
+        );
+        roof = roofdefinition.getRoot().bake(textureWidth, textureHeight);
+
+        MeshDefinition side2definition = new MeshDefinition();
+        side2definition.getRoot().addOrReplaceChild("side2",
+            CubeListBuilder.create()
+                .texOffs(0, 0)
+                .addBox(0F, -16F, -16F, 1, 32, 33)
+                .mirror(true),
+            PartPose.offsetAndRotation(16.0F, 0.0F, 0.0F, 0F, 0F, 0F)
+        );
+        side2 = side2definition.getRoot().bake(textureWidth, textureHeight);
+
+        MeshDefinition side3definition = new MeshDefinition();
+        side3definition.getRoot().addOrReplaceChild("side3",
+            CubeListBuilder.create()
+                .texOffs(0, 0)
+                .addBox(0F, -15F, -15F, 1, 31, 31)
+                .mirror(true),
+            PartPose.offsetAndRotation(-16.0F, 0.0F, 0.0F, 0F, 0F, 0F)
+        );
+        side3 = side3definition.getRoot().bake(textureWidth, textureHeight);
     }
 
     @Override
-    public void render(EntityParachute entity, float f, float f1, float f2, float f3, float f4, float f5) {
-        super.render(entity, f, f1, f2, f3, f4, f5);
-        super.setRotationAngles(entity, f, f1, f2, f3, f4, f5);
-        roof.render(f5);
-        side0.render(f5);
-        side1.render(f5);
-        side2.render(f5);
-        side3.render(f5);
+    public  void setupAnim(@Nonnull EntityParachute p_102618_, float p_102619_, float p_102620_, float p_102621_, float p_102622_, float p_102623_) {
     }
 
-    private void setRotation(RendererModel model, float x, float y, float z) {
-        model.rotateAngleX = x;
-        model.rotateAngleY = y;
-        model.rotateAngleZ = z;
+    @Override
+    public Iterable<ModelPart> parts() {
+        return ImmutableList.of(side0, side1, roof, side2, side3);
     }
-
-
 }

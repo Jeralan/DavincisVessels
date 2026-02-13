@@ -3,8 +3,8 @@
     "parent": "block/block",
     "textures": {
         "wood": "block/oak_planks",
-        "crate": "davincisvessels:blocks/crate_wood",
-        "particle": "davincisvessels:blocks/crate_wood"
+        "crate": "davincisvessels:block/crate_wood",
+        "particle": "davincisvessels:block/crate_wood"
     },
     "elements": [
         {

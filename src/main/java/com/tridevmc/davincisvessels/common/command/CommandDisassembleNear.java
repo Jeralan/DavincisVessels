@@ -5,39 +5,39 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.tridevmc.davincisvessels.common.entity.EntityVessel;
-import net.minecraft.command.CommandSource;
-import net.minecraft.command.Commands;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.text.StringTextComponent;
-import net.minecraft.world.ServerWorld;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 
 import java.util.List;
 
 public class CommandDisassembleNear {
 
-    public static void register(CommandDispatcher<CommandSource> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("dvdisassemblenear")
-                .requires(p -> p.hasPermissionLevel(3))
+                .requires(p -> p.hasPermission(3))
                 .then(Commands.argument("range", DoubleArgumentType.doubleArg(1D, 64D))
                         .executes((c) -> execute(c, DoubleArgumentType.getDouble(c, "range"))))
                 .executes((c) -> execute(c, 16D)));
     }
 
-    private static int execute(CommandContext<CommandSource> d, double range) throws CommandSyntaxException {
-        ServerWorld world = d.getSource().getWorld();
-        AxisAlignedBB area = new AxisAlignedBB(d.getSource().getPos(), d.getSource().getPos()).expand(range, 256, range);
-        List<EntityVessel> vessels = world.getEntitiesWithinAABB(EntityVessel.class, area);
+    private static int execute(CommandContext<CommandSourceStack> d, double range) throws CommandSyntaxException {
+        ServerLevel world = d.getSource().getLevel();
+        AABB area = new AABB(d.getSource().getPosition(), d.getSource().getPosition()).inflate(range, 256, range);
+        List<EntityVessel> vessels = world.getEntitiesOfClass(EntityVessel.class, area);
 
         if (vessels.isEmpty()) {
-            d.getSource().sendErrorMessage(new StringTextComponent("Found no vessels within range to disassemble."));
+            d.getSource().sendFailure(Component.literal("Found no vessels within range to disassemble."));
         } else {
             for (EntityVessel vessel : vessels) {
                 if (!vessel.disassemble(false)) {
-                    d.getSource().sendErrorMessage(new StringTextComponent("Failed to disassemble vessel, dropping as items."));
+                    d.getSource().sendFailure(Component.literal("Failed to disassemble vessel, dropping as items."));
                     vessel.dropAsItems();
                 }
             }
-            d.getSource().sendFeedback(new StringTextComponent(String.format("Disassembled %s vessels.", vessels.size())), true);
+            d.getSource().sendSuccess(() -> Component.literal(String.format("Disassembled %s vessels.", vessels.size())), true);
         }
 
         return vessels.size();

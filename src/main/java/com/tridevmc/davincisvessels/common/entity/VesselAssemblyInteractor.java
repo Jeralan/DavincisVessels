@@ -13,23 +13,26 @@ import com.tridevmc.movingworld.common.chunk.LocatedBlock;
 import com.tridevmc.movingworld.common.chunk.MovingWorldAssemblyInteractor;
 import com.tridevmc.movingworld.common.chunk.assembly.CanAssemble;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.Direction;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 import static com.tridevmc.movingworld.common.chunk.assembly.AssembleResult.ResultType.RESULT_NONE;
 
 public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
 
-    private static List allowedBlocks = ForgeRegistries.BLOCKS.getEntries().stream()
-            .filter(e -> e.getKey().getNamespace().equals(DavincisVesselsMod.MOD_ID) && !e.getKey().getPath().equals("buffer"))
+    private static List<Entry<ResourceKey<Block>, Block>> allowedBlocks = ForgeRegistries.BLOCKS.getEntries().stream()
+            .filter(e -> e.getKey().registry().equals(new ResourceLocation(DavincisVesselsMod.MOD_ID)) && !e.getKey().location().equals("buffer"))
             .collect(Collectors.toList());
 
     private int balloonCount;
@@ -56,7 +59,7 @@ public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
     }
 
     @Override
-    public MovingWorldAssemblyInteractor fromNBT(CompoundNBT tag, World world) {
+    public MovingWorldAssemblyInteractor fromNBT(CompoundTag tag, Level world) {
         VesselAssemblyInteractor mov = new VesselAssemblyInteractor();
         mov.setBalloonCount(tag.getInt("balloonCount"));
         return mov;
@@ -80,7 +83,7 @@ public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
     public void blockDisassembled(LocatedBlock locatedBlock) {
         super.blockDisassembled(locatedBlock); // Currently unimplemented but leaving there just in case.
 
-        if (locatedBlock.state.getBlock() == DavincisVesselsMod.CONTENT.blockSecuredBed) {
+        if (locatedBlock.state.getBlock() == DavincisVesselsMod.CONTENT.blockSecuredBed.get()) {
             if (locatedBlock.tile instanceof TileEntitySecuredBed) {
                 TileEntitySecuredBed securedBed = (TileEntitySecuredBed) locatedBlock.tile;
 
@@ -95,13 +98,13 @@ public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
     @Override
     public boolean isBlockMovingWorldMarker(Block block) {
         if (block != null)
-            return block == DavincisVesselsMod.CONTENT.blockHelm;
+            return block == DavincisVesselsMod.CONTENT.blockHelm.get();
         else
             return false;
     }
 
     @Override
-    public boolean isTileMovingWorldMarker(TileEntity tile) {
+    public boolean isTileMovingWorldMarker(BlockEntity tile) {
         if (tile != null)
             return tile instanceof TileHelm;
         else
@@ -109,7 +112,7 @@ public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
     }
 
     @Override
-    public CanAssemble isBlockAllowed(World world, LocatedBlock lb) {
+    public CanAssemble isBlockAllowed(Level world, LocatedBlock lb) {
         BlockState state = lb.state;
         CanAssemble canAssemble = super.isBlockAllowed(world, lb);
 
@@ -123,7 +126,7 @@ public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
         if (canAssemble.justCancel) {
             canAssemble.justCancel = !allowedBlocks.contains(lb.getBlock());
         } else {
-            canAssemble.justCancel = lb.getBlock() == DavincisVesselsMod.CONTENT.blockBuffer;
+            canAssemble.justCancel = lb.getBlock() == DavincisVesselsMod.CONTENT.blockBuffer.get();
         }
 
         return canAssemble;
@@ -131,7 +134,7 @@ public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
 
     @Override
     public Direction getFrontDirection(LocatedBlock marker) {
-        return marker.state.get(BlockHelm.FACING).getOpposite();
+        return marker.state.getValue(BlockHelm.FACING).getOpposite();
     }
 
     public int getBalloonCount() {
@@ -143,12 +146,12 @@ public class VesselAssemblyInteractor extends MovingWorldAssemblyInteractor {
     }
 
     @Override
-    public void writeNBTFully(CompoundNBT tag) {
+    public void writeNBTFully(CompoundTag tag) {
         writeNBTMetadata(tag);
     }
 
     @Override
-    public void writeNBTMetadata(CompoundNBT tag) {
+    public void writeNBTMetadata(CompoundTag tag) {
         tag.putInt("balloonCount", getBalloonCount());
     }
 }

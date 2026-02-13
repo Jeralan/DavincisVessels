@@ -2,107 +2,120 @@ package com.tridevmc.davincisvessels.common.content.block;
 
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.tileentity.TileEntitySecuredBed;
-import net.minecraft.block.*;
-import net.minecraft.block.material.Material;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.DyeColor;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.state.properties.BedPart;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.BlockRayTraceResult;
-import net.minecraft.util.text.TranslationTextComponent;
-import net.minecraft.world.Explosion;
-import net.minecraft.world.IBlockReader;
-import net.minecraft.world.World;
-import net.minecraft.world.storage.loot.LootContext;
-import net.minecraftforge.common.extensions.IForgeDimension.SleepResult;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.stats.Stats;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 
-public class BlockSecuredBed extends BedBlock implements ITileEntityProvider {
+public class BlockSecuredBed extends BedBlock {
 
     public BlockSecuredBed() {
-        super(DyeColor.RED, Block.Properties.create(Material.WOOL).sound(SoundType.WOOD).hardnessAndResistance(0.2F));
+        super(DyeColor.RED, Block.Properties.of().sound(SoundType.WOOD).strength(0.2F).instrument(NoteBlockInstrument.GUITAR).ignitedByLava());
     }
 
-    private PlayerEntity getPlayerInBed(World world, BlockPos pos) {
-        return world.getPlayers().stream().filter((p) -> p.isSleeping() && p.getBedLocation().equals(pos)).findAny().orElse(null);
+    private Player getPlayerInBed(Level world, BlockPos pos) {
+        return world.players().stream().filter((p) -> p.isSleeping() && p.getSleepingPos().get().equals(pos)).findAny().orElse(null);
     }
 
     @Override
-    public boolean onBlockActivated(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockRayTraceResult hit) {
-        if (world.isRemote) {
-            return true;
+    public InteractionResult use(@Nonnull BlockState state, @Nonnull Level world, @Nonnull BlockPos pos, @Nonnull Player player, @Nonnull InteractionHand hand, @Nonnull BlockHitResult hit) {
+        if (world.isClientSide) {
+            return InteractionResult.SUCCESS;
         } else {
-            if (state.get(PART) != BedPart.HEAD) {
-                pos = pos.offset(state.get(HORIZONTAL_FACING));
+            if (state.getValue(PART) != BedPart.HEAD) {
+                pos = pos.relative(state.getValue(FACING));
                 state = world.getBlockState(pos);
                 if (state.getBlock() != this) {
-                    return true;
+                    return InteractionResult.SUCCESS;
                 }
             }
 
-            TileEntitySecuredBed bed = world.getTileEntity(pos) instanceof TileEntitySecuredBed ? (TileEntitySecuredBed) world.getTileEntity(pos) : null;
-            SleepResult sleepResult = world.dimension.canSleepAt(player, pos);
-            if (sleepResult != SleepResult.BED_EXPLODES) {
-                if (sleepResult == SleepResult.DENY) return true;
+            TileEntitySecuredBed bed = world.getBlockEntity(pos) instanceof TileEntitySecuredBed ? (TileEntitySecuredBed) world.getBlockEntity(pos) : null;
+            if (world.dimensionType().bedWorks()) {
                 if (bed.occupied) {
-                    player.sendStatusMessage(new TranslationTextComponent("block.minecraft.bed.occupied"), true);
-                    return true;
+                    List<Villager> list = world.getEntitiesOfClass(Villager.class, new AABB(pos), LivingEntity::isSleeping);
+                    if (list.isEmpty()) {
+                        player.displayClientMessage(Component.translatable("block.minecraft.bed.occupied"), true);
+                    } else {
+                        list.get(0).stopSleeping();
+                    }
+                    return InteractionResult.SUCCESS;
                 } else {
                     bed.setPlayer(player);
-                    player.trySleep(pos).ifLeft((result) -> {
-                        if (result != null) {
-                            player.sendStatusMessage(result.getMessage(), true);
+                    player.startSleepInBed(pos).ifLeft((result) -> {
+                        if (result.getMessage() != null) {
+                            player.displayClientMessage(result.getMessage(), true);
                         }
                     });
-                    return true;
+                    return InteractionResult.SUCCESS;
                 }
             } else {
                 world.removeBlock(pos, false);
-                BlockPos blockpos = pos.offset(state.get(HORIZONTAL_FACING).getOpposite());
+                BlockPos blockpos = pos.relative(state.getValue(FACING).getOpposite());
                 if (world.getBlockState(blockpos).getBlock() == this) {
                     world.removeBlock(blockpos, false);
                 }
 
-                world.createExplosion(null, DamageSource.netherBedExplosion(), (double) pos.getX() + 0.5D, (double) pos.getY() + 0.5D, (double) pos.getZ() + 0.5D, 5.0F, true, Explosion.Mode.DESTROY);
-                return true;
+                Vec3 vec3 = pos.getCenter();
+                world.explode(null, world.damageSources().badRespawnPointExplosion(vec3), null, new Vec3((double) pos.getX() + 0.5D, (double) pos.getY() + 0.5D, (double) pos.getZ() + 0.5D), 5.0F, true, Level.ExplosionInteraction.BLOCK);
+                return InteractionResult.SUCCESS;
             }
         }
     }
 
 
     @Override
-    public ItemStack getItem(IBlockReader worldIn, BlockPos pos, BlockState state) {
-        return DavincisVesselsMod.CONTENT.itemSecuredBed.getDefaultInstance();
+    public ItemStack getCloneItemStack(@Nonnull BlockGetter worldIn, @Nonnull BlockPos pos, @Nonnull BlockState state) {
+        return DavincisVesselsMod.CONTENT.itemSecuredBed.get().getDefaultInstance();
     }
 
     @Override
-    public List<ItemStack> getDrops(BlockState state, LootContext.Builder builder) {
-        return Collections.singletonList(state.get(PART) == BedPart.HEAD ? DavincisVesselsMod.CONTENT.itemSecuredBed.getDefaultInstance() : Items.AIR.getDefaultInstance());
+    public List<ItemStack> getDrops(@Nonnull BlockState state, @Nonnull LootParams.Builder builder) {
+        return Collections.singletonList(state.getValue(PART) == BedPart.HEAD ? DavincisVesselsMod.CONTENT.itemSecuredBed.get().getDefaultInstance() : Items.AIR.getDefaultInstance());
     }
 
     @Nullable
     @Override
-    public TileEntity createTileEntity(BlockState state, IBlockReader world) {
-        return state.get(PART) == BedPart.HEAD ? new TileEntitySecuredBed() : null;
+    public BlockEntity newBlockEntity(@Nonnull BlockPos blockPos, @Nonnull BlockState state) {
+        return state.getValue(PART) == BedPart.HEAD ? new TileEntitySecuredBed(blockPos, state) : null;
     }
 
-    @Override
-    public boolean isBed(BlockState state, IBlockReader world, BlockPos pos, @Nullable Entity player) {
-        return state.getBlock() instanceof BedBlock;
-    }
+    // @Override
+    // public boolean isBed(BlockState state, Level world, BlockPos pos, @Nullable Entity player) {
+    //     return state.getBlock() instanceof BedBlock;
+    // }
 
     @Override
-    public BlockRenderType getRenderType(BlockState state) {
-        return BlockRenderType.MODEL;
+    public RenderShape getRenderShape(@Nonnull BlockState state) {
+        return RenderShape.MODEL;
     }
 
 }

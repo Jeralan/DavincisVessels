@@ -12,30 +12,43 @@ import com.tridevmc.davincisvessels.common.content.item.ItemSecuredBed;
 import com.tridevmc.davincisvessels.common.entity.EntityParachute;
 import com.tridevmc.davincisvessels.common.entity.EntitySeat;
 import com.tridevmc.davincisvessels.common.entity.EntityVessel;
-import com.tridevmc.davincisvessels.common.tileentity.*;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.FireBlock;
-import net.minecraft.block.SoundType;
-import net.minecraft.block.material.Material;
-import net.minecraft.block.material.MaterialColor;
-import net.minecraft.block.material.PushReaction;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityClassification;
-import net.minecraft.entity.EntityType;
-import net.minecraft.inventory.container.Container;
-import net.minecraft.inventory.container.ContainerType;
-import net.minecraft.item.*;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.tileentity.TileEntityType;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.SharedConstants;
-import net.minecraft.util.datafix.DataFixesManager;
-import net.minecraft.util.datafix.TypeReferences;
-import net.minecraft.world.World;
-import net.minecraftforge.event.RegistryEvent;
+import com.tridevmc.davincisvessels.common.tileentity.TileAnchorPoint;
+import com.tridevmc.davincisvessels.common.tileentity.TileCrate;
+import com.tridevmc.davincisvessels.common.tileentity.TileEngine;
+import com.tridevmc.davincisvessels.common.tileentity.TileEntitySecuredBed;
+import com.tridevmc.davincisvessels.common.tileentity.TileGauge;
+import com.tridevmc.davincisvessels.common.tileentity.TileHelm;
+
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier;
+import net.minecraft.world.level.block.state.BlockBehaviour.Properties;
+import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
+import net.minecraft.world.level.material.MapColor;
+import net.minecraft.util.datafix.DataFixers;
+import net.minecraft.util.datafix.fixes.References;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.registries.IForgeRegistry;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.registries.DeferredRegister;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.RegisterEvent;
+import net.minecraftforge.registries.RegistryObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,194 +59,208 @@ import java.util.function.Supplier;
 
 public class DavincisVesselsContent {
 
-    public BlockHelm blockHelm;
-    public Block blockFloater;
-    public BlockGauge blockGauge;
-    public BlockGauge blockGaugeExtended;
-    public BlockSeat blockSeat;
-    public Block blockStickyBuffer;
-    public Block blockBuffer;
-    public Block blockEngine;
-    public Block blockCrate;
-    public Block blockAnchorPoint;
-    public Block blockSecuredBed;
-    public List<Block> balloonBlocks;
+    public RegistryObject<Block> blockHelm;
+    public RegistryObject<Block> blockFloater;
+    public RegistryObject<Block> blockGauge;
+    public RegistryObject<Block> blockGaugeExtended;
+    public RegistryObject<Block> blockSeat;
+    public RegistryObject<Block> blockStickyBuffer;
+    public RegistryObject<Block> blockBuffer;
+    public RegistryObject<Block> blockEngine;
+    public RegistryObject<Block> blockCrate;
+    public RegistryObject<Block> blockAnchorPoint;
+    public RegistryObject<Block> blockSecuredBed;
+    public List<RegistryObject<Block>> balloonBlocks;
 
-    public Item itemSecuredBed;
+    public RegistryObject<Item> itemSecuredBed;
 
-    public ContainerType<? extends Container> universalContainerType;
+    public MenuType<? extends AbstractContainerMenu> universalContainerType;
 
-    public ItemGroup itemGroup = new ItemGroup("davincisTab") {
-        @Override
-        public ItemStack createIcon() {
-            return new ItemStack(blockHelm);
+    // public ItemGroup itemGroup = new ItemGroup("davincisTab") {
+    //     @Override
+    //     public ItemStack createIcon() {
+    //         return new ItemStack(blockHelm);
+    //     }
+    // };
+
+    private class ItemBlockToRegister {
+        public String id;
+        public Supplier<BlockItem> item;
+
+        public ItemBlockToRegister(String id, Supplier<BlockItem> item) {
+            this.id = id;
+            this.item = item;
         }
-    };
-
-    public Map<Class<? extends TileEntity>, TileEntityType> tileTypes = Maps.newHashMap();
-    public Map<Class<? extends Entity>, EntityType<?>> entityTypes = Maps.newHashMap();
-
-    public Material materialFloater;
-    public HashMap<String, Block> registeredBlocks;
-    public HashMap<String, Item> registeredItems;
-    private String REGISTRY_PREFIX = DavincisVesselsMod.MOD_ID.toLowerCase();
-    private List<Item> itemBlocksToRegister;
-
-    private void setFireInfo(Block block, int encouragement, int flammability) {
-        FireBlock fire = (FireBlock) Blocks.FIRE;
-        fire.setFireInfo(block, encouragement, flammability);
     }
 
-    @SubscribeEvent
-    public void onTileRegister(final RegistryEvent.Register<TileEntityType<?>> e) {
-        IForgeRegistry<TileEntityType<?>> registry = e.getRegistry();
-        registerTileEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "helm"), TileHelm::new);
-        registerTileEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "gauge"), TileGauge::new);
-        registerTileEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "crate"), TileCrate::new);
-        registerTileEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "engine"), TileEngine::new);
-        registerTileEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "anchor_point"), TileAnchorPoint::new);
-        registerTileEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "secured_bed"), TileEntitySecuredBed::new);
+    public Map<Class<? extends BlockEntity>, RegistryObject<BlockEntityType<?>>> tileTypes = Maps.newHashMap();
+    public Map<Class<? extends Entity>, RegistryObject<EntityType<?>>> entityTypes = Maps.newHashMap();
+
+    public Function<Properties, Properties> materialFloater;
+    public HashMap<String, RegistryObject<? extends Block>> registeredBlocks;
+    public HashMap<String, RegistryObject<? extends Item>> registeredItems;
+    private List<ItemBlockToRegister> itemBlocksToRegister;
+
+    public void onTileRegister(DeferredRegister<BlockEntityType<?>> registry) {
+        registerTileEntity(registry, "helm", TileHelm::new, TileHelm.class);
+        registerTileEntity(registry, "gauge", TileGauge::new, TileGauge.class);
+        registerTileEntity(registry, "crate", TileCrate::new, TileCrate.class);
+        registerTileEntity(registry, "engine", TileEngine::new, TileEngine.class);
+        registerTileEntity(registry, "anchor_point", TileAnchorPoint::new, TileAnchorPoint.class);
+        registerTileEntity(registry, "secured_bed", TileEntitySecuredBed::new, TileEntitySecuredBed.class);
     }
 
-    @SubscribeEvent
-    public void onEntityRegister(final RegistryEvent.Register<EntityType<?>> e) {
-        IForgeRegistry<EntityType<?>> registry = e.getRegistry();
-        registerEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "vesselmod"), 64, DavincisVesselsMod.CONFIG.vesselEntitySyncRate, true, EntityVessel.class, EntityVessel::new);
-        registerEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "attachment_seat"), 64, 20, false, EntitySeat.class, EntitySeat::new);
-        registerEntity(registry, new ResourceLocation(REGISTRY_PREFIX, "parachute"), 32, DavincisVesselsMod.CONFIG.vesselEntitySyncRate, true, EntityParachute.class, EntityParachute::new);
+    public void onEntityRegister(DeferredRegister<EntityType<?>> registry) {
+        registerEntity(registry, "vesselmod", 64, DavincisVesselsMod.CONFIG.vesselEntitySyncRate, true, EntityVessel.class, EntityVessel::new);
+        registerEntity(registry, "attachment_seat", 64, 20, false, EntitySeat.class, EntitySeat::new);
+        registerEntity(registry, "parachute", 32, DavincisVesselsMod.CONFIG.vesselEntitySyncRate, true, EntityParachute.class, EntityParachute::new);
     }
 
-    @SubscribeEvent
-    public void onItemRegister(final RegistryEvent.Register<Item> e) {
-        IForgeRegistry<Item> registry = e.getRegistry();
+    public void onItemRegister(DeferredRegister<Item> registry) {
         registeredItems = new HashMap<>();
 
-        itemSecuredBed = new ItemSecuredBed();
-        registerItem(registry, "secured_bed", itemSecuredBed);
+        itemSecuredBed = registerItem(registry, "secured_bed", ItemSecuredBed::new);
 
-        for (Item item : itemBlocksToRegister) {
-            registry.register(item);
+        for (ItemBlockToRegister itemBlockToRegister : itemBlocksToRegister) {
+            registry.register(itemBlockToRegister.id, itemBlockToRegister.item);
         }
     }
 
-    @SubscribeEvent
-    public void onBlockRegister(final RegistryEvent.Register<Block> e) {
-        IForgeRegistry<Block> registry = e.getRegistry();
+    public void onBlockRegister(DeferredRegister<Block> registry, DeferredRegister<CreativeModeTab> creativeRegistry) {
         registeredBlocks = Maps.newHashMap();
         itemBlocksToRegister = Lists.newArrayList();
-        materialFloater = new Material(MaterialColor.WOOL, false, true, true, true, true, true, false, PushReaction.NORMAL);
+        materialFloater = p -> p.mapColor(MapColor.WOOL).ignitedByLava();
+        //new Material(MaterialColor.WOOL, false, true, true, true, true, true, false, PushReaction.NORMAL);
 
         this.balloonBlocks = new ArrayList<>();
         for (DyeColor colour : DyeColor.values()) {
-            BlockBalloon balloon = new BlockBalloon(colour);
-            registerBlock(registry, colour.getTranslationKey() + "_balloon", balloon);
-            balloonBlocks.add(balloon);
-            this.setFireInfo(balloon, 30, 60);
+            Supplier<Block> balloon = () -> new BlockBalloon(colour);
+            RegistryObject<Block> balloonRO = registerBlock(registry, colour.getSerializedName() + "_balloon", balloon);
+            balloonBlocks.add(balloonRO);
         }
 
-        blockHelm = new BlockHelm(Block.Properties.create(Material.WOOD).hardnessAndResistance(1F));
-        registerBlock(registry, "helm", blockHelm);
+        Supplier<Block> blockHelmSupplier = () -> new BlockHelm(Block.Properties.of().strength(1F).mapColor(MapColor.WOOD).instrument(NoteBlockInstrument.BASS).sound(SoundType.WOOD).ignitedByLava());
+        blockHelm = registerBlock(registry, "helm", blockHelmSupplier);
 
-        blockFloater = new BlockAS(materialFloater, SoundType.WOOD);
-        registerBlock(registry, "floater", blockFloater);
+        Supplier<Block> blockFloaterSupplier = () -> new BlockAS(materialFloater, SoundType.WOOD);
+        blockFloater = registerBlock(registry, "floater", blockFloaterSupplier);
 
-        blockGauge = new BlockGauge();
-        registerBlock(registry, "gauge", blockGauge);
+        Supplier<Block> blockGaugeSupplier = BlockGauge::new;
+        blockGauge = registerBlock(registry, "gauge", blockGaugeSupplier);
 
-        blockGaugeExtended = new BlockGauge();
-        registerBlock(registry, "gauge_ext", blockGaugeExtended);
+        Supplier<Block> blockGaugeExtendedSupplier = BlockGauge::new;
+        blockGaugeExtended = registerBlock(registry, "gauge_ext", blockGaugeExtendedSupplier);
 
-        blockSeat = new BlockSeat();
-        registerBlock(registry, "seat", blockSeat);
+        Supplier<Block> blockSeatSupplier = BlockSeat::new;
+        blockSeat = registerBlock(registry, "seat", blockSeatSupplier);
 
-        blockBuffer = new BlockAS(Material.WOOL, SoundType.WOOD);
-        registerBlock(registry, "buffer", blockBuffer);
+        Supplier<Block> blockBufferSupplier = () -> new BlockAS(p -> p.mapColor(MapColor.WOOL).instrument(NoteBlockInstrument.GUITAR).ignitedByLava(), SoundType.WOOD, 0.8F, 0.8F);
+        blockBuffer = registerBlock(registry, "buffer", blockBufferSupplier);
 
-        blockStickyBuffer = new BlockAS(Material.WOOL, SoundType.WOOD);
-        registerBlock(registry, "sticky_buffer", blockStickyBuffer);
+        Supplier<Block> blockStickyBufferSupplier = () -> new BlockAS(p -> p.mapColor(MapColor.WOOL).instrument(NoteBlockInstrument.GUITAR).ignitedByLava(), SoundType.WOOD, 0.8F, 0.8F);
+        blockStickyBuffer = registerBlock(registry, "sticky_buffer", blockStickyBufferSupplier);
 
-        blockEngine = new BlockEngine(1F, DavincisVesselsMod.CONFIG.engineConsumptionRate);
-        registerBlock(registry, "engine", blockEngine);
+        Supplier<Block> blockEngineSupplier = () -> new BlockEngine(1F, DavincisVesselsMod.CONFIG.engineConsumptionRate);
+        blockEngine = registerBlock(registry, "engine", blockEngineSupplier);
 
-        blockCrate = new BlockCrate();
-        registerBlock(registry, "crate_wood", blockCrate);
+        Supplier<Block> blockCrateSupplier = BlockCrate::new;
+        blockCrate = registerBlock(registry, "crate_wood", blockCrateSupplier);
 
-        blockAnchorPoint = new BlockAnchorPoint();
-        registerBlock(registry, "anchor_point", blockAnchorPoint, ItemBlockAnchorPoint.class);
+        Supplier<Block> blockAnchorPointSupplier = BlockAnchorPoint::new;
+        blockAnchorPoint = registerBlock(registry, "anchor_point", blockAnchorPointSupplier, () -> new ItemBlockAnchorPoint(blockAnchorPoint.get()));
 
-        blockSecuredBed = new BlockSecuredBed();
-        registerBlock(registry, "secured_bed", blockSecuredBed, false);
+        Supplier<Block> blockSecuredBedSupplier = BlockSecuredBed::new;
+        blockSecuredBed = registerBlock(registry, "secured_bed", blockSecuredBedSupplier, false);
 
-        this.setFireInfo(blockHelm, 5, 5);
-        this.setFireInfo(blockSeat, 30, 30);
+        creativeRegistry.register("davincistab", () -> CreativeModeTab.builder().title(Component.literal("davincisTab")).icon(() -> {
+            return new ItemStack(blockHelm.get());
+        }).displayItems((params, out) -> {
+            out.accept(blockHelm.get());
+            out.accept(blockFloater.get());
+            out.accept(blockGauge.get());
+            out.accept(blockGaugeExtended.get());
+            out.accept(blockSeat.get());
+            out.accept(blockBuffer.get());
+            out.accept(blockStickyBuffer.get());
+            out.accept(blockEngine.get());
+            out.accept(blockCrate.get());
+            out.accept(blockAnchorPoint.get());
+        }).build());
     }
 
-    @SubscribeEvent
-    public void onContainerRegister(final RegistryEvent.Register<ContainerType<?>> e) {
-        universalContainerType = DavincisUIHooks.register(e.getRegistry());
+    public void onContainerRegister(DeferredRegister<MenuType<?>> registry) {
+        universalContainerType = DavincisUIHooks.register(registry);
+        // DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> DavincisUIHooks::registerScreens);
     }
 
-    private void registerBlock(IForgeRegistry<Block> registry, String id, Block block) {
-        registerBlock(registry, id, block, true);
+    private <B extends Block> RegistryObject<Block> registerBlock(DeferredRegister<Block> registry, String id, Supplier<B> block) {
+        return registerBlock(registry, id, block, true);
     }
 
-    private void registerBlock(IForgeRegistry<Block> registry, String id, Block block, boolean withItemBlock) {
-        block.setRegistryName(REGISTRY_PREFIX, id);
-        registry.register(block);
+    private <B extends Block> RegistryObject<Block> registerBlock(DeferredRegister<Block> registry, String id, Supplier<B> block, boolean withItemBlock) {
+        // block.setRegistryName(REGISTRY_PREFIX, id);
+        RegistryObject<Block> registryObject = registry.register(id, block);
         if (withItemBlock)
-            itemBlocksToRegister.add(new BlockItem(block, new Item.Properties().group(itemGroup)).setRegistryName(block.getRegistryName()));
-        registeredBlocks.put(id, block);
+            itemBlocksToRegister.add(new ItemBlockToRegister(id, () -> {
+                var out = new BlockItem(registryObject.get(), new Item.Properties());
+                if (out.getBlock() == Blocks.AIR) {
+                    new IllegalStateException("Block "+id);
+                }
+                return out;
+            })); // .setRegistryName(block.getRegistryName()));
+        registeredBlocks.put(id, registryObject);
+        return registryObject;
     }
 
-    private void registerBlock(IForgeRegistry<Block> registry, String id, Block block, Class<? extends BlockItem> itemBlockClass) {
-        try {
-            block.setRegistryName(REGISTRY_PREFIX, id);
-            registry.register(block);
-
-            BlockItem itemBlock = itemBlockClass.getDeclaredConstructor(Block.class).newInstance(block);
-            itemBlock.setRegistryName(REGISTRY_PREFIX, id);
-            itemBlocksToRegister.add(itemBlock);
-            registeredBlocks.put(id, block);
-        } catch (Exception e) {
-            DavincisVesselsMod.LOG.error("Caught exception while registering " + block, e);
-        }
+    private <B extends Block> RegistryObject<Block> registerBlock(DeferredRegister<Block> registry, String id, Supplier<B> block, Supplier<BlockItem> itemBlockClass) {
+        // try {
+        // block.setRegistryName(REGISTRY_PREFIX, id);
+        RegistryObject<Block> registryObject = registry.register(id, block);
+        // itemBlock.setRegistryName(REGISTRY_PREFIX, id);
+        itemBlocksToRegister.add(new ItemBlockToRegister(id, itemBlockClass));
+        registeredBlocks.put(id, registryObject);
+        return registryObject;
+        // } catch (Exception e) {
+        //     DavincisVesselsMod.LOG.error("Caught exception while registering " + block, e);
+        // }
     }
 
-    private void registerItem(IForgeRegistry<Item> registry, String id, Item item) {
-        item.setRegistryName(REGISTRY_PREFIX, id);
-        registry.register(item);
-        registeredItems.put(id, item);
+    private <I extends Item> RegistryObject<Item> registerItem(DeferredRegister<Item> registry, String id, Supplier<I> item) {
+        // item.setRegistryName(REGISTRY_PREFIX, id);
+        RegistryObject<Item> registryObject = registry.register(id, item);
+        registeredItems.put(id, registryObject);
+        return registryObject;
     }
 
-    private void registerTileEntity(IForgeRegistry<TileEntityType<?>> registry, ResourceLocation id, Supplier<TileEntity> tileSupplier) {
-        Type<?> dataFixer = null;
+    private void registerTileEntity(DeferredRegister<BlockEntityType<?>> registry, String id, BlockEntitySupplier tileSupplier, Class<? extends BlockEntity> c) {
+        // Type<?> dataFixer = null;
 
-        try {
-            dataFixer = DataFixesManager.getDataFixer().getSchema(DataFixUtils.makeKey(1519)).getChoiceType(TypeReferences.BLOCK_ENTITY, id.toString());
-        } catch (IllegalArgumentException e) {
-            if (SharedConstants.developmentMode) {
-                throw e;
-            }
-        }
+        // try {
+        // } catch (IllegalArgumentException e) {
+        //     if (SharedConstants.IS_RUNNING_IN_IDE) {
+        //         throw e;
+        //     }
+        // }
 
-        TileEntityType<TileEntity> tileType = TileEntityType.Builder.create(tileSupplier).build(dataFixer);
-        tileType.setRegistryName(id);
-        this.tileTypes.put(tileSupplier.get().getClass(), tileType);
-        registry.register(tileType);
+        // tileType.setRegistryName(id);
+        RegistryObject<BlockEntityType<?>> registryObject = registry.register(id, () -> BlockEntityType.Builder.of(tileSupplier).build(null));
+        this.tileTypes.put(c, registryObject);
+        
     }
 
-    private void registerEntity(IForgeRegistry<EntityType<?>> registry, ResourceLocation id,
+    private void registerEntity(DeferredRegister<EntityType<?>> registry, String id,
                                 int range, int updateFrequency, boolean sendVelocityUpdates,
-                                Class<? extends Entity> clazz, Function<? super World, ? extends Entity> entityCreator) {
-        EntityType<Entity> entityType = EntityType.Builder.create((t, world) -> entityCreator.apply(world), EntityClassification.MISC)
+                                Class<? extends Entity> clazz, Function<? super Level, ? extends Entity> entityCreator) {
+        EntityType.Builder entityType = EntityType.Builder.of((t, world) -> entityCreator.apply(world), MobCategory.MISC)
                 .setTrackingRange(range)
                 .setUpdateInterval(updateFrequency)
                 .setShouldReceiveVelocityUpdates(sendVelocityUpdates)
-                .disableSummoning()
-                .setCustomClientFactory((spawnEntity, world) -> entityCreator.apply(world))
-                .build(id.toString());
-        entityType.setRegistryName(id);
-        registry.register(entityType);
-        this.entityTypes.put(clazz, entityType);
+                .noSummon()
+                .setCustomClientFactory((spawnEntity, world) -> entityCreator.apply(world));
+
+                // .build(id.toString());
+        // entityType.setRegistryName(id);
+        RegistryObject<EntityType<?>> registryObject = registry.register(id, () -> entityType.build(id.toString()));
+        this.entityTypes.put(clazz, registryObject);
     }
 }

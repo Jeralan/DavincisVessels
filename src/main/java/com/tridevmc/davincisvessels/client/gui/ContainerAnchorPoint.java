@@ -1,34 +1,37 @@
 package com.tridevmc.davincisvessels.client.gui;
 
 
+import javax.annotation.Nonnull;
+
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.tileentity.TileAnchorPoint;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.inventory.container.Container;
-import net.minecraft.inventory.container.Slot;
-import net.minecraft.item.ItemStack;
 
-public class ContainerAnchorPoint extends Container {
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.Container;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+
+public class ContainerAnchorPoint extends AbstractContainerMenu {
     public final TileAnchorPoint anchorPoint;
-    public final PlayerEntity player;
+    public final Player player;
 
-    public ContainerAnchorPoint(int window, TileAnchorPoint anchorPoint, PlayerEntity player) {
+    public ContainerAnchorPoint(int window, TileAnchorPoint anchorPoint, Player player) {
         super(DavincisVesselsMod.CONTENT.universalContainerType, window);
         this.anchorPoint = anchorPoint;
         this.player = player;
 
-        bindPlayerInventory(player.inventory);
+        bindPlayerInventory(player.getInventory());
         addSlot(new SlotAnchor(this.anchorPoint, 0, 32 + 16, 64 + 36));
     }
 
     @Override
-    public boolean canInteractWith(PlayerEntity player) {
-        return anchorPoint.isUsableByPlayer(player);
+    public boolean stillValid(@Nonnull Player player) {
+        return anchorPoint.stillValid(player);
     }
 
-    protected void bindPlayerInventory(PlayerInventory inventoryPlayer) {
+    protected void bindPlayerInventory(Inventory inventoryPlayer) {
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 9; j++) {
                 addSlot(new Slot(inventoryPlayer, j + i * 9 + 9, 48 + j * 18, 138 + i * 18));
@@ -41,26 +44,26 @@ public class ContainerAnchorPoint extends Container {
     }
 
     @Override
-    public ItemStack transferStackInSlot(PlayerEntity player, int slotNum) {
+    public ItemStack quickMoveStack(@Nonnull Player player, int slotNum) {
         ItemStack itemstack = ItemStack.EMPTY;
-        Slot slot = this.inventorySlots.get(slotNum);
+        Slot slot = this.slots.get(slotNum);
 
-        if (slot != null && slot.getHasStack()) {
-            ItemStack itemstack1 = slot.getStack();
+        if (slot != null && slot.hasItem()) {
+            ItemStack itemstack1 = slot.getItem();
             itemstack = itemstack1.copy();
 
             if (slotNum < 4) {
-                if (!this.mergeItemStack(itemstack1, 4, this.inventorySlots.size(), true)) {
+                if (!this.moveItemStackTo(itemstack1, 4, this.slots.size(), true)) {
                     return ItemStack.EMPTY;
                 }
-            } else if (!this.mergeItemStack(itemstack1, 0, 4, false)) {
+            } else if (!this.moveItemStackTo(itemstack1, 0, 4, false)) {
                 return ItemStack.EMPTY;
             }
 
             if (itemstack1.getCount() == 0) {
-                slot.putStack(ItemStack.EMPTY);
+                slot.set(ItemStack.EMPTY);
             } else {
-                slot.onSlotChanged();
+                slot.setChanged();
             }
         }
 
@@ -68,12 +71,12 @@ public class ContainerAnchorPoint extends Container {
     }
 
     public class SlotAnchor extends Slot {
-        public SlotAnchor(IInventory inventoryIn, int index, int xPosition, int yPosition) {
+        public SlotAnchor(Container inventoryIn, int index, int xPosition, int yPosition) {
             super(inventoryIn, index, xPosition, yPosition);
         }
 
         @Override
-        public boolean isItemValid(ItemStack itemstack) {
+        public boolean mayPlace(@Nonnull ItemStack itemstack) {
             return TileAnchorPoint.isItemAnchor(itemstack);
         }
     }

@@ -1,27 +1,29 @@
 package com.tridevmc.davincisvessels.common.tileentity;
 
+import javax.annotation.Nonnull;
+
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.common.entity.EntityVessel;
 import com.tridevmc.movingworld.api.IMovingTile;
 import com.tridevmc.movingworld.common.chunk.mobilechunk.MobileChunk;
 import com.tridevmc.movingworld.common.entity.EntityMovingWorld;
-import net.minecraft.client.renderer.texture.ITickable;
-import net.minecraft.entity.Entity;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SUpdateTileEntityPacket;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
 
-public class TileCrate extends TileEntity implements IMovingTile, ITickable {
+public class TileCrate extends BlockEntity implements IMovingTile {
     private EntityVessel parentVessel;
     private int containedEntityId;
     private Entity containedEntity;
     private int refreshTime;
     private BlockPos chunkPos;
 
-    public TileCrate() {
-        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileCrate.class));
+    public TileCrate(BlockPos pos, BlockState state) {
+        super(DavincisVesselsMod.CONTENT.tileTypes.get(TileCrate.class).get(), pos, state);
         parentVessel = null;
         containedEntityId = 0;
         containedEntity = null;
@@ -64,15 +66,15 @@ public class TileCrate extends TileEntity implements IMovingTile, ITickable {
         } else if (!containedEntity.isAlive()) {
             setContainedEntity(null);
         } else {
-            containedEntity.setMotion(0, 0, 0);
+            containedEntity.setDeltaMovement(0, 0, 0);
             if (parentVessel == null) {
-                containedEntity.setPosition(pos.getX() + 0.5d, pos.getY() + 0.15f + containedEntity.getYOffset(), pos.getZ() + 0.5d);
+                containedEntity.moveTo(worldPosition.getX() + 0.5d, worldPosition.getY() + 0.15f + containedEntity.getMyRidingOffset(), worldPosition.getZ() + 0.5d);
             } else {
-                parentVessel.updatePassengerPosition(containedEntity, pos, 2);
+                parentVessel.updatePassengerPosition(containedEntity, worldPosition, 2);
             }
 
-            if (containedEntity.hurtResistantTime > 0 || containedEntity.isSneaking()) {
-                containedEntity.posY += 1d;
+            if (containedEntity.invulnerableTime > 0 || containedEntity.isCrouching()) {
+                containedEntity.moveTo(containedEntity.getX(), containedEntity.getY()+1d, containedEntity.getX());
                 releaseEntity();
             }
         }
@@ -93,52 +95,53 @@ public class TileCrate extends TileEntity implements IMovingTile, ITickable {
 
     public void setContainedEntity(Entity entity) {
         containedEntity = entity;
-        containedEntityId = containedEntity == null ? 0 : containedEntity.getEntityId();
+        containedEntityId = containedEntity == null ? 0 : containedEntity.getId();
         refreshTime = 0;
     }
 
     @Override
-    public SUpdateTileEntityPacket getUpdatePacket() {
-        CompoundNBT compound = new CompoundNBT();
-        write(compound);
-        return new SUpdateTileEntityPacket(pos, 0, compound);
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        CompoundTag compound = new CompoundTag();
+        saveAdditional(compound);
+        return ClientboundBlockEntityDataPacket.create(this, x -> compound);
     }
 
     @Override
-    public void onDataPacket(NetworkManager net, SUpdateTileEntityPacket packet) {
-        read(packet.getNbtCompound());
+    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket packet) {
+        CompoundTag tag = packet.getTag();
+        if (tag != null) {
+            load(packet.getTag());
+        }
     }
 
     @Override
-    public void read(CompoundNBT tag) {
-        super.read(tag);
+    public void load(@Nonnull CompoundTag tag) {
+        super.load(tag);
         if (tag.contains("contained")) {
-            if (world == null) {
+            if (level == null) {
                 containedEntityId = tag.getInt("contained");
             } else {
-                setContainedEntity(world.getEntityByID(tag.getInt("contained")));
+                setContainedEntity(level.getEntity(tag.getInt("contained")));
             }
         }
     }
 
     @Override
-    public CompoundNBT write(CompoundNBT tag) {
-        tag = super.write(tag);
+    public void saveAdditional(@Nonnull CompoundTag tag) {
+        super.saveAdditional(tag);
         if (containedEntity != null) {
-            tag.putInt("contained", containedEntity.getEntityId());
+            tag.putInt("contained", containedEntity.getId());
         }
-        return tag;
     }
 
-    @Override
     public void tick() {
-        if (world.isRemote) {
+        if (level.isClientSide) {
             if (parentVessel != null && !parentVessel.isAlive()) {
                 parentVessel = null;
             }
             if (containedEntity == null) {
                 if (containedEntityId != 0) {
-                    setContainedEntity(world.getEntityByID(containedEntityId));
+                    setContainedEntity(level.getEntity(containedEntityId));
                 }
             }
         }
@@ -150,15 +153,15 @@ public class TileCrate extends TileEntity implements IMovingTile, ITickable {
         } else if (!containedEntity.isAlive()) {
             setContainedEntity(null);
         } else {
-            containedEntity.setMotion(0, 0, 0);
+            containedEntity.setDeltaMovement(0, 0, 0);
             if (parentVessel == null) {
-                containedEntity.setPosition(pos.getX() + 0.5d, pos.getY() + 0.15f + containedEntity.getYOffset(), pos.getZ() + 0.5d);
+                containedEntity.moveTo(worldPosition.getX() + 0.5d, worldPosition.getY() + 0.15f + containedEntity.getMyRidingOffset(), worldPosition.getZ() + 0.5d);
             } else {
-                parentVessel.updatePassengerPosition(containedEntity, pos, 2);
+                parentVessel.updatePassengerPosition(containedEntity, worldPosition, 2);
             }
 
-            if (containedEntity.hurtResistantTime > 0 || containedEntity.isSneaking()) {
-                containedEntity.posY += 1d;
+            if (containedEntity.invulnerableTime > 0 || containedEntity.isCrouching()) {
+                containedEntity.moveTo(containedEntity.getX(), containedEntity.getY()+1d, containedEntity.getX());
                 releaseEntity();
             }
         }

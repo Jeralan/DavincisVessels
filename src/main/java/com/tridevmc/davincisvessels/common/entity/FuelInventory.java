@@ -1,22 +1,25 @@
 package com.tridevmc.davincisvessels.common.entity;
 
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.FurnaceTileEntity;
+import net.minecraft.world.entity.player.Player;
 
-public class FuelInventory implements IInventory {
+import javax.annotation.Nonnull;
+
+import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.FurnaceBlockEntity;
+
+public class FuelInventory implements Container {
 
     private EntityVessel vessel;
     private ItemStack[] contents;
 
     public FuelInventory(EntityVessel entityvessel) {
         vessel = entityvessel;
-        contents = new ItemStack[getSizeInventory()];
+        contents = new ItemStack[getContainerSize()];
     }
 
     @Override
-    public int getSizeInventory() {
+    public int getContainerSize() {
         return 4;
     }
 
@@ -32,19 +35,19 @@ public class FuelInventory implements IInventory {
     }
 
     @Override
-    public ItemStack getStackInSlot(int i) {
+    public ItemStack getItem(int i) {
         return i >= 0 && i < 4 ? contents[i] : null;
     }
 
     @Override
-    public ItemStack decrStackSize(int i, int n) {
+    public ItemStack removeItem(int i, int n) {
         if (contents[i] != null) {
             ItemStack itemstack;
 
             if (contents[i].getCount() <= n) {
                 itemstack = contents[i];
                 contents[i] = null;
-                markDirty();
+                setChanged();
                 return itemstack;
             }
 
@@ -53,14 +56,14 @@ public class FuelInventory implements IInventory {
                 contents[i] = null;
             }
 
-            markDirty();
+            setChanged();
             return itemstack;
         }
         return null;
     }
 
     @Override
-    public ItemStack removeStackFromSlot(int i) {
+    public ItemStack removeItemNoUpdate(int i) {
         ItemStack content = contents[i].copy();
         contents[i] = null;
 
@@ -68,41 +71,41 @@ public class FuelInventory implements IInventory {
     }
 
     @Override
-    public void setInventorySlotContents(int i, ItemStack is) {
+    public void setItem(int i, @Nonnull ItemStack is) {
         if (i >= 0 && i < 4) {
             contents[i] = is;
         }
     }
 
     @Override
-    public int getInventoryStackLimit() {
+    public int getMaxStackSize() {
         return 64;
     }
 
     @Override
-    public void markDirty() {
+    public void setChanged() {
     }
 
     @Override
-    public boolean isUsableByPlayer(PlayerEntity player) {
-        return player.getRidingEntity() == vessel;
+    public boolean stillValid(@Nonnull Player player) {
+        return player.getVehicle() == vessel;
     }
 
     @Override
-    public void openInventory(PlayerEntity player) {
+    public void startOpen(@Nonnull Player player) {
     }
 
     @Override
-    public void closeInventory(PlayerEntity playe) {
+    public void stopOpen(@Nonnull Player player) {
     }
 
     @Override
-    public boolean isItemValidForSlot(int i, ItemStack is) {
-        return i >= 0 && i < 4 && FurnaceTileEntity.isFuel(is);
+    public boolean canPlaceItem(int i, @Nonnull ItemStack is) {
+        return i >= 0 && i < 4 && FurnaceBlockEntity.isFuel(is);
     }
 
     @Override
-    public void clear() {
+    public void clearContent() {
     }
 
 }

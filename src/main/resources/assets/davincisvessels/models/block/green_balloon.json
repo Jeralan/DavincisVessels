@@ -1,6 +1,6 @@
 {
     "parent": "block/cube_all",
     "textures": {
-        "all": "davincisvessels:blocks/green_balloon"
+        "all": "davincisvessels:block/green_balloon"
     }
 }

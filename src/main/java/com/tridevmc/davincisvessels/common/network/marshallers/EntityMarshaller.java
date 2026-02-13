@@ -1,22 +1,28 @@
 package com.tridevmc.davincisvessels.common.network.marshallers;
 
+import java.nio.charset.Charset;
+
 import com.tridevmc.compound.network.marshallers.Marshaller;
 import com.tridevmc.compound.network.marshallers.RegisteredMarshaller;
 import com.tridevmc.movingworld.MovingWorldMod;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.entity.Entity;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 
 @RegisteredMarshaller(channel = "davincisvessels", acceptedTypes = {Entity.class}, ids = {"entity"})
 public class EntityMarshaller extends Marshaller<Entity> {
 
     @Override
+    /*
+     * dimId is a ResourceKey<Level> toString
+     */
     public Entity readFrom(ByteBuf in) {
         if (in.readBoolean()) {
-            int dimID = in.readInt();
+            int len = in.readInt();
+            String dimID = in.readCharSequence(len, Charset.defaultCharset()).toString();
             int entityID = in.readInt();
-            World world = MovingWorldMod.PROXY.getWorld(dimID);
-            return world.getEntityByID(entityID);
+            Level world = MovingWorldMod.PROXY.getWorld(dimID);
+            return world.getEntity(entityID);
         } else {
             return null;
         }
@@ -26,8 +32,10 @@ public class EntityMarshaller extends Marshaller<Entity> {
     public void writeTo(ByteBuf out, Entity entity) {
         if (entity != null) {
             out.writeBoolean(true);
-            out.writeInt(entity.world.getDimension().getType().getId());
-            out.writeInt(entity.getEntityId());
+            String dimID = entity.level().dimension().toString();
+            out.writeInt(dimID.length());
+            out.writeCharSequence(dimID, Charset.defaultCharset());
+            out.writeInt(entity.getId());
         } else {
             out.writeBoolean(false);
         }

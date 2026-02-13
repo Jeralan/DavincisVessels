@@ -1,11 +1,13 @@
 package com.tridevmc.davincisvessels.common.network.message;
 
+import javax.annotation.Nullable;
+
 import com.tridevmc.compound.network.message.Message;
 import com.tridevmc.compound.network.message.RegisteredMessage;
 import com.tridevmc.davincisvessels.DavincisVesselsMod;
 import com.tridevmc.davincisvessels.client.gui.ContainerHelm;
 import com.tridevmc.movingworld.common.chunk.assembly.AssembleResult;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.fml.LogicalSide;
 
 /**
@@ -29,9 +31,9 @@ public class AssembleResultMessage extends Message {
     }
 
     @Override
-    public void handle(PlayerEntity sender) {
-        if (sender != null && sender.openContainer instanceof ContainerHelm) {
-            ContainerHelm helmContainer = (ContainerHelm) sender.openContainer;
+    public void handle(@Nullable Player sender) {
+        if (sender != null && sender.containerMenu instanceof ContainerHelm) {
+            ContainerHelm helmContainer = (ContainerHelm) sender.containerMenu;
             if (setPrevious) {
                 DavincisVesselsMod.LOG.info("Received previous assemble result!");
                 DavincisVesselsMod.LOG.info(this.result.getBlockCount());

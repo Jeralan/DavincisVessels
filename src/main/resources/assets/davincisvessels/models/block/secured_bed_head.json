@@ -1,11 +1,11 @@
 {
     "parent": "block/block",
     "textures": {
-        "particle": "davincisvessels:blocks/secured_bed_head_top",
-        "top": "davincisvessels:blocks/secured_bed_head_top",
+        "particle": "davincisvessels:block/secured_bed_head_top",
+        "top": "davincisvessels:block/secured_bed_head_top",
         "bottom": "minecraft:block/oak_planks",
-        "end": "davincisvessels:blocks/secured_bed_head_end",
-        "side": "davincisvessels:blocks/secured_bed_head_side"
+        "end": "davincisvessels:block/secured_bed_head_end",
+        "side": "davincisvessels:block/secured_bed_head_side"
     },
     "elements": [
         {
